@@ -39,6 +39,7 @@ class ChatAgent:
     def __init__(self):
         """Initialize the chat agent with message handler."""
         self.message_handler = MessageHandler()
+        self.room = None  # Store room reference for event handlers
         logger.info("🤖 ChatAgent initialized")
     
     async def entrypoint(self, ctx: JobContext):
@@ -52,6 +53,9 @@ class ChatAgent:
         
         # Connect to the room
         await ctx.connect()
+        
+        # Store room reference for use in event handlers
+        self.room = ctx.room
         
         # Set up event handlers (sync wrappers for async handlers)
         def sync_handle_data_received(data, participant):
@@ -127,9 +131,9 @@ class ChatAgent:
                 "timestamp": asyncio.get_event_loop().time()
             }
             
-            # Send response back to room (using participant's room reference)
-            if participant and participant.room:
-                await participant.room.local_participant.publish_data(
+            # Send response back to room (using stored room reference)
+            if participant and self.room:
+                await self.room.local_participant.publish_data(
                     json.dumps(response_data).encode(),
                     reliable=True
                 )
@@ -150,8 +154,8 @@ class ChatAgent:
                     "timestamp": asyncio.get_event_loop().time()
                 }
                 
-                if participant and participant.room:
-                    await participant.room.local_participant.publish_data(
+                if participant and self.room:
+                    await self.room.local_participant.publish_data(
                         json.dumps(error_response).encode(),
                         reliable=True
                     )
@@ -176,7 +180,7 @@ class ChatAgent:
                 "timestamp": asyncio.get_event_loop().time()
             }
             
-            await participant.room.local_participant.publish_data(
+            await self.room.local_participant.publish_data(
                 json.dumps(greeting_message).encode(),
                 reliable=True
             )

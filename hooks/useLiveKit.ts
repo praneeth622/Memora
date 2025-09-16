@@ -7,7 +7,9 @@ import {
   LocalParticipant,
   Participant as LiveKitSDKParticipant,
   ConnectionState as LiveKitConnectionState,
-  RoomConnectOptions
+  RoomConnectOptions,
+  ConnectionQuality,
+  DisconnectReason
 } from 'livekit-client'
 import { 
   generateAccessToken, 
@@ -34,7 +36,11 @@ import {
  * @param config - LiveKit configuration object
  * @returns Object containing connection methods, state, and real-time data
  */
-export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
+/**
+ * Custom hook for LiveKit integration
+ */
+export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitReturn {
+  console.log('🎣 useLiveKit hook called with config:', config)
   // State management
   const [state, setState] = useState<ConnectionState>(ConnectionState.DISCONNECTED)
   const [messages, setMessages] = useState<Message[]>([])
@@ -48,6 +54,10 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const messageIdCounterRef = useRef(0)
   const isConnectedRef = useRef(false)
+  const reconnectAttemptsRef = useRef(0)
+  const maxReconnectAttempts = 5
+  const reconnectDelayMs = 2000
+  const lastConnectionParamsRef = useRef<{roomName: string, identity: string} | null>(null)
 
   /**
    * Convert LiveKit participant to our Participant interface
@@ -103,7 +113,11 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
    * Connect to LiveKit room
    */
   const connect = useCallback(async (): Promise<void> => {
+    console.log('🔌 useLiveKit.connect() called with config:', config)
+    console.log('🔌 Current state:', state)
+    
     if (state === ConnectionState.CONNECTING || state === ConnectionState.CONNECTED) {
+      console.log('🔌 Already connecting or connected, skipping')
       return
     }
 
@@ -121,6 +135,12 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
     try {
       setState(ConnectionState.CONNECTING)
       setError(null)
+      
+      // Store connection parameters for potential reconnection
+      lastConnectionParamsRef.current = {
+        roomName: config.room,
+        identity: config.identity
+      }
 
       // Try to get token from token server, fallback to development mode
       let token: string
@@ -129,7 +149,7 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
       } else {
         // Try to fetch token from backend server
         try {
-          const tokenServerUrl = process.env.NEXT_PUBLIC_TOKEN_SERVER_URL || 'http://localhost:3001'
+          const tokenServerUrl = process.env.NEXT_PUBLIC_TOKEN_SERVER_URL || 'http://localhost:3003'
           const response = await fetch(`${tokenServerUrl}/token`, {
             method: 'POST',
             headers: {
@@ -164,16 +184,32 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
         // Simulate connection delay
         await new Promise(resolve => setTimeout(resolve, 1000))
         
-        // Set connected state
+        // Create mock room for development mode
+        const mockRoom = {
+          localParticipant: {
+            publishData: async (data: any, options: any) => {
+              console.log('🔧 Mock publishData called:', { data, options })
+              return Promise.resolve()
+            }
+          },
+          state: 'connected',
+          disconnect: async () => {
+            console.log('🔧 Mock disconnect called')
+            return Promise.resolve()
+          }
+        }
+        
+        // Set connected state and mock room reference
         setState(ConnectionState.CONNECTED)
-        setRoomName(config.room)
+        setRoomName(config.room || null)
         isConnectedRef.current = true
+        roomRef.current = mockRoom as any // Mock room for development
 
         // Create local participant
         const localParticipant: Participant = {
           id: `local_${config.identity}`,
-          identity: config.identity,
-          name: config.identity,
+          identity: config.identity || 'testuser',
+          name: config.identity || 'testuser',
           isLocal: true,
           connectionState: 'connected',
           joinedAt: new Date(),
@@ -184,21 +220,41 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
           isSpeaking: false
         }
 
+        // Create mock AI agent participant
+        const agentParticipant: Participant = {
+          id: 'agent_ai_assistant',
+          identity: 'AI-Assistant',
+          name: 'AI Assistant',
+          isLocal: false,
+          connectionState: 'connected',
+          joinedAt: new Date(),
+          lastSeen: new Date(),
+          audioEnabled: false,
+          videoEnabled: false,
+          screenShareEnabled: false,
+          isSpeaking: false
+        }
+
         setLocalParticipant(localParticipant)
-        setParticipants([localParticipant])
+        setParticipants([localParticipant, agentParticipant])
         setMessages([createSystemMessage(`Connected to room: ${config.room} (Development Mode)`)])
         
         return
       }
 
       // Initialize LiveKit Room (Production mode)
-      const room = new Room(defaultRoomOptions)
+      console.log('🏗️ Creating LiveKit room with data-only configuration...')
+      const room = new Room({
+        ...defaultRoomOptions,
+        // Additional options for stability
+        stopLocalTrackOnUnpublish: false,
+      })
 
       // Set up event listeners
       room.on(RoomEvent.Connected, () => {
         console.log('✅ Connected to LiveKit room:', config.room)
         setState(ConnectionState.CONNECTED)
-        setRoomName(config.room)
+        setRoomName(config.room || null)
         isConnectedRef.current = true
 
         // Update participants with all current participants
@@ -211,10 +267,20 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
         setMessages([createSystemMessage(`Connected to room: ${config.room}`)])
       })
 
-      room.on(RoomEvent.Disconnected, () => {
-        console.log('🔌 Disconnected from LiveKit room')
+      room.on(RoomEvent.Disconnected, (reason) => {
+        console.log('🔌 Disconnected from LiveKit room, reason:', reason)
         setState(ConnectionState.DISCONNECTED)
         isConnectedRef.current = false
+        
+        // Attempt reconnection if disconnected unexpectedly
+        if (reason && reason !== DisconnectReason.CLIENT_INITIATED && reconnectAttemptsRef.current < maxReconnectAttempts) {
+          console.log('🔄 Unexpected disconnection, attempting to reconnect...')
+          attemptReconnect()
+        } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+          console.error('❌ Max reconnection attempts reached, giving up')
+          setState(ConnectionState.ERROR)
+          setError('Connection lost and max reconnection attempts reached')
+        }
       })
 
       room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
@@ -252,28 +318,95 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
       room.on(RoomEvent.Reconnecting, () => {
         console.log('🔄 Reconnecting to LiveKit room...')
         setState(ConnectionState.RECONNECTING)
+        reconnectAttemptsRef.current += 1
       })
 
       room.on(RoomEvent.Reconnected, () => {
         console.log('✅ Reconnected to LiveKit room')
         setState(ConnectionState.CONNECTED)
+        reconnectAttemptsRef.current = 0 // Reset on successful reconnection
+        setError(null) // Clear any previous errors
       })
 
-      // Connect to room
+      room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+        console.log(`📊 Connection quality for ${participant?.identity || 'local'}: ${quality}`)
+        if (quality === ConnectionQuality.Poor) {
+          console.warn('⚠️ Poor connection quality detected')
+        }
+      })
+
+      // Connect to room with retry logic
       const serverUrl = config.serverUrl || LIVEKIT_URL
-      await room.connect(serverUrl, token)
+      const connectOptions = {
+        ...defaultConnectOptions,
+        // Use data-only mode for chat application
+        autoSubscribe: false, // Don't automatically subscribe to audio/video
+      }
+      
+      console.log('🔌 Attempting to connect to LiveKit server:', serverUrl)
+      console.log('🎫 Using token:', token.substring(0, 50) + '...')
+      console.log('⚙️ Connect options:', connectOptions)
+      
+      // Add timeout to connection
+      const connectionPromise = room.connect(serverUrl, token, connectOptions)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
+      )
+      
+      await Promise.race([connectionPromise, timeoutPromise])
       roomRef.current = room
+      isConnectedRef.current = true
 
       console.log('✅ Successfully connected to LiveKit room:', config.room)
+      console.log('✅ Room state:', room.state)
+      console.log('✅ Local participant:', room.localParticipant.identity)
 
     } catch (err) {
       console.error('❌ Failed to connect to LiveKit room:', err)
+      console.error('❌ Error details:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : 'No stack trace',
+        serverUrl: config.serverUrl || LIVEKIT_URL,
+        room: config.room,
+        identity: config.identity
+      })
       setState(ConnectionState.ERROR)
       setError(err instanceof Error ? err.message : 'Connection failed')
       isConnectedRef.current = false
-      throw err
+      
+      // Don't throw the error to prevent app crashes, just log it
+      return
     }
-  }, [state, config, convertParticipant, generateMessageId, createSystemMessage])
+  }, [state, config.room, config.identity, config.token, config.serverUrl, convertParticipant, generateMessageId, createSystemMessage])
+
+  /**
+   * Automatic reconnection with exponential backoff
+   */
+  const attemptReconnect = useCallback(async (): Promise<void> => {
+    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+      console.error(`❌ Max reconnection attempts (${maxReconnectAttempts}) reached`)
+      setState(ConnectionState.ERROR)
+      setError(`Failed to reconnect after ${maxReconnectAttempts} attempts`)
+      return
+    }
+
+    if (!lastConnectionParamsRef.current) {
+      console.error('❌ No previous connection parameters for reconnection')
+      return
+    }
+
+    const delay = reconnectDelayMs * Math.pow(2, reconnectAttemptsRef.current)
+    console.log(`🔄 Attempting reconnection ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts} in ${delay}ms`)
+    
+    reconnectTimeoutRef.current = setTimeout(async () => {
+      try {
+        await connect()
+      } catch (err) {
+        console.error('❌ Reconnection attempt failed:', err)
+        await attemptReconnect() // Try again
+      }
+    }, delay)
+  }, [connect])
 
   /**
    * Disconnect from LiveKit room
@@ -301,11 +434,13 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
       setLocalParticipant(null)
       setError(null)
 
-      // Clear reconnection timeout
+      // Clear reconnection timeout and reset attempts
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
       }
+      reconnectAttemptsRef.current = 0 // Reset reconnection attempts on manual disconnect
+      lastConnectionParamsRef.current = null // Clear stored connection params
 
       console.log('✅ Disconnected from LiveKit room')
 
@@ -376,7 +511,7 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
         throw new Error('Room not connected')
       }
 
-      const messageData = createMessageData(text.trim(), config.identity)
+      const messageData = createMessageData(text.trim(), config.identity || 'unknown')
       await roomRef.current.localParticipant.publishData(messageData, { reliable: true })
 
       // Add message to local state (for immediate display)
@@ -614,7 +749,27 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
   //   }
   // }, [state, config.token, connect])
 
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+      if (roomRef.current) {
+        roomRef.current.disconnect()
+      }
+    }
+  }, [])
+
   // Return hook interface
+  console.log('🎣 useLiveKit returning functions:', {
+    connectExists: !!connect,
+    disconnectExists: !!disconnect,
+    connectType: typeof connect,
+    disconnectType: typeof disconnect
+  })
+  
   return {
     // Connection methods
     connect,

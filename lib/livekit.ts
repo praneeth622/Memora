@@ -25,11 +25,15 @@ export async function generateAccessToken(roomName: string, participantName: str
  * Default room options for LiveKit connections
  */
 export const defaultRoomOptions: RoomOptions = {
-  adaptiveStream: true,
-  dynacast: true,
+  adaptiveStream: false,  // Disable for chat-only mode
+  dynacast: false,        // Not needed for data-only
   publishDefaults: {
-    simulcast: false,
+    simulcast: false,     // Not needed for data-only
+    videoSimulcastLayers: [], // No video
+    audioPreset: undefined,   // No audio
   },
+  // Optimize for data-only connections
+  webAudioMix: false,
 };
 
 /**
@@ -37,8 +41,20 @@ export const defaultRoomOptions: RoomOptions = {
  */
 export const defaultConnectOptions: RoomConnectOptions = {
   autoSubscribe: true,
-  maxRetries: 3,
-  peerConnectionTimeout: 15000,
+  maxRetries: 5,
+  peerConnectionTimeout: 30000,
+  // Add WebRTC configuration for better connectivity
+  rtcConfig: {
+    iceServers: [
+      {
+        urls: 'stun:stun.l.google.com:19302',
+      },
+      {
+        urls: 'stun:stun1.l.google.com:19302',
+      },
+    ],
+    iceCandidatePoolSize: 10,
+  },
 };
 
 /**

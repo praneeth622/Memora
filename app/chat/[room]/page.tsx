@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +16,8 @@ import { LiveKitConfig, ChatPageProps } from '@/lib/types'
 export const dynamicParams = true
 
 export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
+  console.log('🚀 ChatRoomPage loaded with:', { params, searchParams })
+  
   const { room } = params
   const { username } = searchParams
 
@@ -80,13 +82,23 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
 
   // Auto-connect on component mount
   useEffect(() => {
-    connect().catch(console.error)
+    console.log('🔌 ChatRoomPage: useEffect triggered - attempting connection')
     
-    // Cleanup on unmount
-    return () => {
-      disconnect().catch(console.error)
+    if (!connect || !room || !decodedUsername) {
+      console.log('🔌 ChatRoomPage: Missing requirements for connection')
+      return
     }
-  }, [connect, disconnect])
+    
+    // Only connect if not already connected/connecting
+    if (state === ConnectionState.DISCONNECTED) {
+      console.log('🔌 ChatRoomPage: Starting connection...')
+      connect().then(() => {
+        console.log('🔌 ChatRoomPage: Connection successful')
+      }).catch((error) => {
+        console.error('🔌 ChatRoomPage: Connection failed:', error)
+      })
+    }
+  }, [connect, state, room, decodedUsername])
 
   // Connection status
   const isConnected = state === ConnectionState.CONNECTED
@@ -195,6 +207,15 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
                   </>
                 )}
               </Badge>
+              {!isConnected && (
+                <Button 
+                  size="sm" 
+                  onClick={() => connect().catch(console.error)}
+                  disabled={isConnecting}
+                >
+                  {isConnecting ? 'Connecting...' : 'Connect'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
