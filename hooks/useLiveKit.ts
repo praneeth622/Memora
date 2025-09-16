@@ -1,79 +1,29 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-
-// TypeScript Interfaces and Types
-export enum ConnectionState {
-  DISCONNECTED = 'disconnected',
-  CONNECTING = 'connecting',
-  CONNECTED = 'connected',
-  RECONNECTING = 'reconnecting',
-  ERROR = 'error'
-}
-
-export interface Message {
-  id: string
-  text: string
-  sender: {
-    id: string
-    identity: string
-    name: string
-    isLocal: boolean
-  }
-  timestamp: Date
-  type: 'text' | 'system'
-}
-
-export interface Participant {
-  id: string
-  identity: string
-  name: string
-  isLocal: boolean
-  connectionState: 'connected' | 'disconnected' | 'reconnecting'
-  joinedAt: Date
-  lastSeen: Date
-  metadata?: string
-  audioEnabled: boolean
-  videoEnabled: boolean
-  screenShareEnabled: boolean
-  isSpeaking: boolean
-}
-
-export interface LiveKitConfig {
-  token: string
-  room: string
-  identity: string
-  serverUrl?: string
-  options?: {
-    autoSubscribe?: boolean
-    publishDefaults?: {
-      audioEnabled?: boolean
-      videoEnabled?: boolean
-    }
-  }
-}
-
-export interface UseLiveKitReturn {
-  // Connection methods
-  connect: () => Promise<void>
-  disconnect: () => Promise<void>
-  
-  // Messaging
-  sendMessage: (text: string) => Promise<void>
-  
-  // State
-  messages: Message[]
-  participants: Participant[]
-  state: ConnectionState
-  error: string | null
-  
-  // Room info
-  roomName: string | null
-  localParticipant: Participant | null
-  
-  // Media controls (for future implementation)
-  toggleAudio: () => Promise<void>
-  toggleVideo: () => Promise<void>
-  toggleScreenShare: () => Promise<void>
-}
+import { 
+  Room, 
+  RoomEvent, 
+  DataPacket_Kind, 
+  RemoteParticipant, 
+  LocalParticipant,
+  Participant as LiveKitSDKParticipant,
+  ConnectionState as LiveKitConnectionState,
+  RoomConnectOptions
+} from 'livekit-client'
+import { 
+  generateAccessToken, 
+  defaultRoomOptions, 
+  defaultConnectOptions, 
+  LIVEKIT_URL,
+  createMessageData,
+  parseMessageData
+} from '@/lib/livekit'
+import { 
+  LiveKitMessage as Message,
+  LiveKitParticipant as Participant,
+  LiveKitConfig,
+  UseLiveKitReturn,
+  ConnectionState
+} from '@/lib/types'
 
 /**
  * Custom React hook for managing LiveKit room connections and real-time communication
@@ -94,13 +44,30 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
   const [localParticipant, setLocalParticipant] = useState<Participant | null>(null)
 
   // Refs for cleanup and state persistence
-  const roomRef = useRef<any>(null) // TODO: Replace with Room from @livekit/client
+  const roomRef = useRef<Room | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const messageIdCounterRef = useRef(0)
   const isConnectedRef = useRef(false)
 
-  // TODO: Import LiveKit SDK
-  // import { Room, RoomEvent, DataPacket_Kind, RemoteParticipant, LocalParticipant } from '@livekit/client'
+  /**
+   * Convert LiveKit participant to our Participant interface
+   */
+  const convertParticipant = useCallback((lkParticipant: LiveKitSDKParticipant): Participant => {
+    return {
+      id: lkParticipant.sid || lkParticipant.identity,
+      identity: lkParticipant.identity,
+      name: lkParticipant.name || lkParticipant.identity,
+      isLocal: lkParticipant instanceof LocalParticipant,
+      connectionState: 'connected', // Simplified for now
+      joinedAt: new Date(),
+      lastSeen: new Date(),
+      metadata: lkParticipant.metadata,
+      audioEnabled: false, // Chat-only app
+      videoEnabled: false, // Chat-only app
+      screenShareEnabled: false,
+      isSpeaking: false
+    }
+  }, [])
 
   /**
    * Generate unique message ID
@@ -128,51 +95,9 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
     }
   }, [generateMessageId])
 
-  /**
-   * Create local participant object
-   */
-  const createLocalParticipant = useCallback((): Participant => {
-    return {
-      id: `local_${config.identity}`,
-      identity: config.identity,
-      name: config.identity,
-      isLocal: true,
-      connectionState: 'connected',
-      joinedAt: new Date(),
-      lastSeen: new Date(),
-      audioEnabled: config.options?.publishDefaults?.audioEnabled ?? false,
-      videoEnabled: config.options?.publishDefaults?.videoEnabled ?? false,
-      screenShareEnabled: false,
-      isSpeaking: false
-    }
-  }, [config.identity, config.options])
 
-  /**
-   * Simulate remote participant joining (placeholder for LiveKit participant events)
-   */
-  const simulateRemoteParticipantJoin = useCallback((identity: string) => {
-    // Don't add if already exists
-    if (participants.some(p => p.identity === identity)) {
-      return
-    }
 
-    const newParticipant: Participant = {
-      id: `remote_${identity}_${Date.now()}`,
-      identity,
-      name: identity,
-      isLocal: false,
-      connectionState: 'connected',
-      joinedAt: new Date(),
-      lastSeen: new Date(),
-      audioEnabled: Math.random() > 0.5,
-      videoEnabled: Math.random() > 0.5,
-      screenShareEnabled: false,
-      isSpeaking: false
-    }
 
-    setParticipants(prev => [...prev, newParticipant])
-    setMessages(prev => [...prev, createSystemMessage(`${identity} joined the room`)])
-  }, [participants, createSystemMessage])
 
   /**
    * Connect to LiveKit room
@@ -198,56 +123,102 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
       setState(ConnectionState.CONNECTING)
       setError(null)
 
-      // TODO: Initialize LiveKit Room
-      // const room = new Room({
-      //   adaptiveStream: true,
-      //   dynacast: true,
-      //   ...config.options
-      // })
-
-      // TODO: Set up event listeners
-      // room.on(RoomEvent.Connected, handleRoomConnected)
-      // room.on(RoomEvent.Disconnected, handleRoomDisconnected)
-      // room.on(RoomEvent.ParticipantConnected, handleParticipantConnected)
-      // room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected)
-      // room.on(RoomEvent.DataReceived, handleDataReceived)
-      // room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged)
-      // room.on(RoomEvent.Reconnecting, handleReconnecting)
-      // room.on(RoomEvent.Reconnected, handleReconnected)
-
-      // TODO: Connect to room
-      // await room.connect(config.serverUrl || 'wss://your-livekit-server.com', config.token)
-      // roomRef.current = room
-
-      // Simulate connection process
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // Simulate successful connection
-      setState(ConnectionState.CONNECTED)
-      setRoomName(config.room)
-      isConnectedRef.current = true
-      
-      // Create and set local participant
-      const localParticipantData = createLocalParticipant()
-      setLocalParticipant(localParticipantData)
-      setParticipants([localParticipantData])
-      
-      // Add welcome message
-      setMessages([createSystemMessage(`Connected to room: ${config.room}`)])
-
-      // Simulate other participants joining (for demo purposes)
-      setTimeout(() => {
-        if (isConnectedRef.current) {
-          simulateRemoteParticipantJoin('Alice')
+      // Generate access token via API
+      let token: string
+      if (config.token) {
+        token = config.token
+      } else {
+        const response = await fetch('/api/livekit/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomName: config.room,
+            participantName: config.identity
+          })
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to generate access token')
         }
-      }, 2000)
-      setTimeout(() => {
-        if (isConnectedRef.current) {
-          simulateRemoteParticipantJoin('Bob')
-        }
-      }, 4000)
+        
+        const data = await response.json()
+        token = data.token
+      }
 
-      console.log('✅ Connected to LiveKit room:', config.room)
+      // Initialize LiveKit Room
+      const room = new Room(defaultRoomOptions)
+
+      // Set up event listeners
+      room.on(RoomEvent.Connected, () => {
+        console.log('✅ Connected to LiveKit room:', config.room)
+        setState(ConnectionState.CONNECTED)
+        setRoomName(config.room)
+        isConnectedRef.current = true
+
+        // Update participants with all current participants
+        const allParticipants = [room.localParticipant, ...Array.from(room.remoteParticipants.values())]
+        const convertedParticipants = allParticipants.map(convertParticipant)
+        setParticipants(convertedParticipants)
+        setLocalParticipant(convertParticipant(room.localParticipant))
+
+        // Add welcome message
+        setMessages([createSystemMessage(`Connected to room: ${config.room}`)])
+      })
+
+      room.on(RoomEvent.Disconnected, () => {
+        console.log('🔌 Disconnected from LiveKit room')
+        setState(ConnectionState.DISCONNECTED)
+        isConnectedRef.current = false
+      })
+
+      room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
+        console.log('👤 Participant connected:', participant.identity)
+        setParticipants(prev => [...prev, convertParticipant(participant)])
+        setMessages(prev => [...prev, createSystemMessage(`${participant.identity} joined the room`)])
+      })
+
+      room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
+        console.log('👤 Participant disconnected:', participant.identity)
+        setParticipants(prev => prev.filter(p => p.id !== participant.sid))
+        setMessages(prev => [...prev, createSystemMessage(`${participant.identity} left the room`)])
+      })
+
+      room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant?: RemoteParticipant) => {
+        console.log('📨 Data received from:', participant?.identity || 'unknown')
+        const messageData = parseMessageData(payload)
+        if (messageData && messageData.type === 'chat-message') {
+          const newMessage: Message = {
+            id: generateMessageId(),
+            text: messageData.content,
+            sender: {
+              id: participant?.sid || 'unknown',
+              identity: participant?.identity || messageData.sender,
+              name: participant?.name || messageData.sender,
+              isLocal: false
+            },
+            timestamp: new Date(messageData.timestamp),
+            type: 'text'
+          }
+          setMessages(prev => [...prev, newMessage])
+        }
+      })
+
+      room.on(RoomEvent.Reconnecting, () => {
+        console.log('🔄 Reconnecting to LiveKit room...')
+        setState(ConnectionState.RECONNECTING)
+      })
+
+      room.on(RoomEvent.Reconnected, () => {
+        console.log('✅ Reconnected to LiveKit room')
+        setState(ConnectionState.CONNECTED)
+      })
+
+      // Connect to room
+      const serverUrl = config.serverUrl || LIVEKIT_URL
+      await room.connect(serverUrl, token)
+      roomRef.current = room
+
+      console.log('✅ Successfully connected to LiveKit room:', config.room)
 
     } catch (err) {
       console.error('❌ Failed to connect to LiveKit room:', err)
@@ -256,7 +227,7 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
       isConnectedRef.current = false
       throw err
     }
-  }, [state, config, createLocalParticipant, createSystemMessage, simulateRemoteParticipantJoin])
+  }, [state, config, convertParticipant, generateMessageId, createSystemMessage])
 
   /**
    * Disconnect from LiveKit room
@@ -268,14 +239,11 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
     try {
       console.log('🔌 Disconnecting from LiveKit room...')
       
-      // TODO: Disconnect from LiveKit room
-      // if (roomRef.current) {
-      //   await roomRef.current.disconnect()
-      //   roomRef.current = null
-      // }
-
-      // Simulate disconnection delay
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Disconnect from LiveKit room
+      if (roomRef.current) {
+        await roomRef.current.disconnect()
+        roomRef.current = null
+      }
 
       setState(ConnectionState.DISCONNECTED)
       isConnectedRef.current = false
@@ -314,21 +282,15 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
       throw new Error('Message cannot be empty')
     }
     try {
-      // TODO: Send data using LiveKit
-      // const encoder = new TextEncoder()
-      // const data = encoder.encode(JSON.stringify({
-      //   type: 'chat',
-      //   message: text,
-      //   timestamp: Date.now(),
-      //   sender: config.identity
-      // }))
-      // 
-      // await roomRef.current?.localParticipant.publishData(
-      //   data,
-      //   DataPacket_Kind.RELIABLE
-      // )
+      // Send data using LiveKit
+      if (!roomRef.current) {
+        throw new Error('Room not connected')
+      }
 
-      // Simulate message sending
+      const messageData = createMessageData(text.trim(), config.identity)
+      await roomRef.current.localParticipant.publishData(messageData, { reliable: true })
+
+      // Add message to local state (for immediate display)
       const newMessage: Message = {
         id: generateMessageId(),
         text: text.trim(),
@@ -590,4 +552,4 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
 }
 
 // Export types for external use
-export type { LiveKitConfig, UseLiveKitReturn, Message, Participant }
+export { ConnectionState } from '@/lib/types'

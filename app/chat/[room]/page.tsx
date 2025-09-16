@@ -1,87 +1,19 @@
 "use client"
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { UserList } from '@/components/chat/user-list'
 import { MessageList } from '@/components/chat/message-list'
 import { MessageInput } from '@/components/chat/message-input'
-import { MessageCircle, Wifi, WifiOff } from 'lucide-react'
+import { MessageCircle, Wifi, WifiOff, Loader2 } from 'lucide-react'
+import useLiveKit from '@/hooks/useLiveKit'
+import { ConnectionState, LiveKitConfig, ChatPageProps } from '@/lib/types'
 
 // Add this export to allow dynamic parameters
 export const dynamicParams = true
-
-// TypeScript interfaces
-interface ChatPageProps {
-  params: {
-    room: string
-  }
-  searchParams: {
-    username?: string
-  }
-}
-
-interface User {
-  id: string
-  username: string
-  isOnline: boolean
-  avatar?: string
-}
-
-interface Message {
-  id: string
-  username: string
-  content: string
-  timestamp: Date
-  type: 'text' | 'system'
-}
-
-// Mock data for development
-const mockUsers: User[] = [
-  { id: '1', username: 'Alice', isOnline: true },
-  { id: '2', username: 'Bob', isOnline: true },
-  { id: '3', username: 'Charlie', isOnline: false },
-  { id: '4', username: 'Diana', isOnline: true },
-]
-
-const mockMessages: Message[] = [
-  {
-    id: '1',
-    username: 'System',
-    content: 'Welcome to the chat room!',
-    timestamp: new Date(Date.now() - 300000),
-    type: 'system'
-  },
-  {
-    id: '2',
-    username: 'Alice',
-    content: 'Hey everyone! How is everyone doing today?',
-    timestamp: new Date(Date.now() - 240000),
-    type: 'text'
-  },
-  {
-    id: '3',
-    username: 'Bob',
-    content: 'Great! Just working on some new projects. What about you?',
-    timestamp: new Date(Date.now() - 180000),
-    type: 'text'
-  },
-  {
-    id: '4',
-    username: 'Alice',
-    content: 'Same here! Really excited about what we\'re building.',
-    timestamp: new Date(Date.now() - 120000),
-    type: 'text'
-  },
-  {
-    id: '5',
-    username: 'Diana',
-    content: 'Just joined! This looks like a great discussion.',
-    timestamp: new Date(Date.now() - 60000),
-    type: 'text'
-  },
-]
 
 export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
   const { room } = params
@@ -120,19 +52,104 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
   const decodedRoom = decodeURIComponent(room)
   const decodedUsername = decodeURIComponent(username)
 
-  // TODO: Replace with LiveKit connection status
-  const isConnected = true
+  // LiveKit configuration
+  const liveKitConfig: LiveKitConfig = {
+    token: '', // Will be generated in the hook
+    room: room,
+    identity: decodedUsername,
+    serverUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL,
+    options: {
+      autoSubscribe: true,
+      publishDefaults: {
+        audioEnabled: false,
+        videoEnabled: false
+      }
+    }
+  }
 
-  // TODO: Replace with actual LiveKit participant data
-  const participants = mockUsers
+  // Use LiveKit hook
+  const {
+    connect,
+    disconnect,
+    sendMessage,
+    messages: liveKitMessages,
+    participants: liveKitParticipants,
+    state,
+    error
+  } = useLiveKit(liveKitConfig)
 
-  // TODO: Replace with actual LiveKit message data
-  const messages = mockMessages
+  // Auto-connect on component mount
+  useEffect(() => {
+    connect().catch(console.error)
+    
+    // Cleanup on unmount
+    return () => {
+      disconnect().catch(console.error)
+    }
+  }, [connect, disconnect])
 
-  // TODO: Implement LiveKit message sending
-  const handleSendMessage = (content: string) => {
-    console.log('Sending message:', content)
-    // This will be replaced with LiveKit message sending logic
+  // Connection status
+  const isConnected = state === ConnectionState.CONNECTED
+  const isConnecting = state === ConnectionState.CONNECTING
+  const isReconnecting = state === ConnectionState.RECONNECTING
+
+  // Convert LiveKit participants to UserList format
+  const participants = liveKitParticipants.map(participant => ({
+    id: participant.id,
+    username: participant.name,
+    isOnline: participant.connectionState === 'connected'
+  }))
+
+  // Convert LiveKit messages to MessageList format  
+  const messages = liveKitMessages.map(message => ({
+    id: message.id,
+    username: message.sender.name,
+    content: message.text,
+    timestamp: message.timestamp,
+    type: message.type as 'text' | 'system'
+  }))
+
+  // Handle sending messages
+  const handleSendMessage = async (content: string) => {
+    try {
+      await sendMessage(content)
+    } catch (error) {
+      console.error('Failed to send message:', error)
+      // You could add toast notification here
+    }
+  }
+
+  // Show loading state while connecting
+  if (isConnecting) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex items-center justify-center p-6">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span>Connecting to room...</span>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl text-destructive">Connection Error</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <p className="text-muted-foreground">{error}</p>
+            <Button onClick={() => connect().catch(console.error)}>
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -158,13 +175,18 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
             {/* Connection Status */}
             <div className="flex items-center space-x-2">
               <Badge 
-                variant={isConnected ? "default" : "destructive"}
+                variant={isConnected ? "default" : isReconnecting ? "secondary" : "destructive"}
                 className="flex items-center space-x-1"
               >
                 {isConnected ? (
                   <>
                     <Wifi className="h-3 w-3" />
                     <span>Connected</span>
+                  </>
+                ) : isReconnecting ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Reconnecting</span>
                   </>
                 ) : (
                   <>
@@ -213,7 +235,7 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
               <MessageInput 
                 onSendMessage={handleSendMessage}
                 disabled={!isConnected}
-                placeholder={`Message ${decodedRoom}...`}
+                placeholder={isConnected ? `Message ${decodedRoom}...` : "Connecting..."}
               />
             </div>
           </div>
