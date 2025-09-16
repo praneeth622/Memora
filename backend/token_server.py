@@ -56,10 +56,8 @@ def generate_token():
             }), 400
         
         # Create access token
-        token = AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, identity=identity)
-        
-        # Add video grant for room access
-        token.add_grant(VideoGrants(
+        token = AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+        token = token.with_identity(identity).with_grants(VideoGrants(
             room_join=True,
             room=room,
         ))

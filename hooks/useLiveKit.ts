@@ -156,9 +156,8 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
         }
       }
 
-      // Check if we're in development mode (no real LiveKit server)
-      const isDevelopmentMode = !process.env.NEXT_PUBLIC_LIVEKIT_URL || 
-                               process.env.NEXT_PUBLIC_LIVEKIT_URL.includes('your-project.livekit.cloud')
+      // Check if we're in development mode (using mock token because backend failed)
+      const isDevelopmentMode = token.startsWith('dev-token-')
 
       if (isDevelopmentMode) {
         console.log('🔧 Development Mode: Simulating LiveKit connection')

@@ -17,13 +17,13 @@ class MemoryService:
     
     def __init__(self):
         """Initialize the memory service with mem0 client."""
+        self.logger = logging.getLogger(__name__)
         try:
             # Initialize mem0 Memory client
             self.memory = Memory()
-            self.logger = logging.getLogger(__name__)
             self.logger.info("MemoryService initialized with mem0.ai")
         except Exception as e:
-            self.logger.error(f"Failed to initialize mem0 client: {e}")
+            self.logger.warning(f"Failed to initialize mem0 client: {e}. Running without memory functionality.")
             self.memory = None
     
     async def get_user_context(self, username: str) -> List[Dict[str, Any]]:

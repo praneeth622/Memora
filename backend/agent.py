@@ -53,10 +53,19 @@ class ChatAgent:
         # Connect to the room
         await ctx.connect()
         
-        # Set up event handlers
-        ctx.room.on("data_received", self._handle_data_received)
-        ctx.room.on("participant_connected", self._handle_participant_connected)
-        ctx.room.on("participant_disconnected", self._handle_participant_disconnected)
+        # Set up event handlers (sync wrappers for async handlers)
+        def sync_handle_data_received(data, participant):
+            asyncio.create_task(self._handle_data_received(data, participant))
+            
+        def sync_handle_participant_connected(participant):
+            asyncio.create_task(self._handle_participant_connected(participant))
+            
+        def sync_handle_participant_disconnected(participant):
+            asyncio.create_task(self._handle_participant_disconnected(participant))
+        
+        ctx.room.on("data_received", sync_handle_data_received)
+        ctx.room.on("participant_connected", sync_handle_participant_connected)
+        ctx.room.on("participant_disconnected", sync_handle_participant_disconnected)
         
         logger.info(f"✅ Agent connected to room: {ctx.room.name}")
         

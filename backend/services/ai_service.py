@@ -16,12 +16,18 @@ class AIService:
     
     def __init__(self):
         """Initialize the AI service with OpenAI client."""
-        self.client = AsyncOpenAI(
-            api_key=os.getenv('OPENAI_API_KEY')
-        )
-        self.logger = logging.getLogger(__name__)
-        self.model = "gpt-3.5-turbo"  # Use GPT-3.5-turbo for faster responses
-        self.logger.info("AIService initialized with OpenAI")
+        try:
+            self.client = AsyncOpenAI(
+                api_key=os.getenv('OPENAI_API_KEY')
+            )
+            self.logger = logging.getLogger(__name__)
+            self.model = "gpt-3.5-turbo"  # Use GPT-3.5-turbo for faster responses
+            self.logger.info("AIService initialized with OpenAI")
+        except Exception as e:
+            # Fallback to simple responses if OpenAI fails
+            self.logger = logging.getLogger(__name__)
+            self.client = None
+            self.logger.warning(f"OpenAI initialization failed: {e}. Using fallback responses.")
     
     async def generate_response(self, message: str, context: List[Dict[str, Any]]) -> str:
         """
@@ -34,6 +40,17 @@ class AIService:
         Returns:
             AI-generated response text
         """
+        # Fallback responses if OpenAI client failed to initialize
+        if self.client is None:
+            fallback_responses = [
+                f"Thanks for your message: '{message}'. I'm currently running in fallback mode, but I'm here to help!",
+                f"I received your message about: {message}. The AI service is initializing, but I can still chat with you!",
+                f"Hello! You mentioned: '{message}'. I'm your AI assistant, currently in simple response mode.",
+                f"I see you said: '{message}'. I'm working on getting my full AI capabilities online!"
+            ]
+            import random
+            return random.choice(fallback_responses)
+        
         try:
             # Build the conversation context for the AI
             messages = [
