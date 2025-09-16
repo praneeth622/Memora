@@ -186,6 +186,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
         
         // Create mock room for development mode
         const mockRoom = {
+          __mockRoom: true,
           localParticipant: {
             publishData: async (data: any, options: any) => {
               console.log('🔧 Mock publishData called:', { data, options })
@@ -420,7 +421,10 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       
       // Disconnect from LiveKit room
       if (roomRef.current) {
-        await roomRef.current.disconnect()
+        // Check if it's a mock room
+        if (!(roomRef.current as any).__mockRoom) {
+          await roomRef.current.disconnect()
+        }
         roomRef.current = null
       }
 
@@ -463,11 +467,11 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       throw new Error('Message cannot be empty')
     }
     try {
-      // Check if we're in development mode
-      const isDevelopmentMode = !process.env.NEXT_PUBLIC_LIVEKIT_URL || 
-                               process.env.NEXT_PUBLIC_LIVEKIT_URL.includes('your-project.livekit.cloud')
+      // Check if we're in development mode (consistent with connect function)
+      const isDevelopmentMode = !roomRef.current || 
+                               (roomRef.current as any).__mockRoom === true
 
-      if (isDevelopmentMode) {
+      if (isDevelopmentMode ) {
         // Development mode: Add message directly to local state
         const newMessage: Message = {
           id: generateMessageId(),

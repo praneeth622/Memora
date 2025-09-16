@@ -13,9 +13,35 @@ export const DEFAULT_ROOM_NAME = process.env.NEXT_PUBLIC_DEFAULT_ROOM_NAME || 'a
  * For now, we'll use a simplified token generation approach
  */
 export async function generateAccessToken(roomName: string, participantName: string): Promise<string> {
-  // In a real application, this would be an API call to your backend
-  // For development purposes, we'll use a mock token
-  // TODO: Replace with actual backend API call
+  // First try to get token from backend server
+  try {
+    const tokenServerUrl = process.env.NEXT_PUBLIC_TOKEN_SERVER_URL;
+    if (tokenServerUrl) {
+      const response = await fetch(`${tokenServerUrl}/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          room: roomName,
+          identity: participantName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Got real token from server');
+        return data.token;
+      } else {
+        console.warn('⚠️ Token server responded with error:', response.status);
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Token server not available:', error);
+  }
+
+  // Fallback to development mode with mock tokens
+  console.log('🔄 Using development mode with mock tokens');
   const mockToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3MjY1MTIwMDAsImV4cCI6MTcyNjU5ODQwMCwiaXNzIjoidGVzdCIsInN1YiI6IiR7cGFydGljaXBhbnROYW1lfSIsInZpZGVvIjp7InJvb20iOiIke3Jvb21OYW1lfSIsInJvb21Kb2luIjp0cnVlLCJjYW5QdWJsaXNoIjp0cnVlLCJjYW5TdWJzY3JpYmUiOnRydWUsImNhblB1Ymxpc2hEYXRhIjp0cnVlfX0.mock-signature`;
   
   return mockToken.replace('${participantName}', participantName).replace('${roomName}', roomName);

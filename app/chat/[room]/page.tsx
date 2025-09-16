@@ -80,9 +80,19 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
     error
   } = useLiveKit(liveKitConfig)
 
+  console.log('🎯 ChatRoomPage render - state:', state, 'connect:', !!connect, 'error:', error)
+
+  // Debug: Test useEffect
+  useEffect(() => {
+    console.log('🧪 TEST useEffect is running!')
+  }, [])
+
   // Auto-connect on component mount
   useEffect(() => {
     console.log('🔌 ChatRoomPage: useEffect triggered - attempting connection')
+    console.log('🔌 ChatRoomPage: Current state:', state)
+    console.log('🔌 ChatRoomPage: Connect function available:', !!connect)
+    console.log('🔌 ChatRoomPage: Room:', room, 'Username:', decodedUsername)
     
     if (!connect || !room || !decodedUsername) {
       console.log('🔌 ChatRoomPage: Missing requirements for connection')
@@ -97,6 +107,8 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
       }).catch((error) => {
         console.error('🔌 ChatRoomPage: Connection failed:', error)
       })
+    } else {
+      console.log('🔌 ChatRoomPage: Not connecting because state is:', state)
     }
   }, [connect, state, room, decodedUsername])
 
@@ -164,6 +176,17 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
     )
   }
 
+  // Debug: Add manual connection test button
+  const testConnection = async () => {
+    console.log('🧪 Manual connect test triggered')
+    try {
+      await connect()
+      console.log('🧪 Manual connect test successful')
+    } catch (err) {
+      console.error('🧪 Manual connect test failed:', err)
+    }
+  }
+
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Header */}
@@ -216,6 +239,13 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
                   {isConnecting ? 'Connecting...' : 'Connect'}
                 </Button>
               )}
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={testConnection}
+              >
+                Test
+              </Button>
             </div>
           </div>
         </div>
