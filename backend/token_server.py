@@ -121,6 +121,6 @@ if __name__ == '__main__':
     # Run the server
     app.run(
         host='0.0.0.0',
-        port=int(os.getenv('PORT', 3001)),
+        port=int(os.getenv('PORT', 3003)),
         debug=os.getenv('ENVIRONMENT') == 'development'
     )

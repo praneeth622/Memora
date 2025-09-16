@@ -43,6 +43,11 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
   console.log('🎣 useLiveKit hook called with config:', config)
   // State management
   const [state, setState] = useState<ConnectionState>(ConnectionState.DISCONNECTED)
+  
+  // Keep state ref in sync
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
   const [messages, setMessages] = useState<Message[]>([])
   const [participants, setParticipants] = useState<Participant[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +59,8 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const messageIdCounterRef = useRef(0)
   const isConnectedRef = useRef(false)
+  const stateRef = useRef<ConnectionState>(ConnectionState.DISCONNECTED)
+  const connectingRef = useRef(false) // Track if connection is in progress
   const reconnectAttemptsRef = useRef(0)
   const maxReconnectAttempts = 5
   const reconnectDelayMs = 2000
@@ -114,12 +121,18 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
    */
   const connect = useCallback(async (): Promise<void> => {
     console.log('🔌 useLiveKit.connect() called with config:', config)
-    console.log('🔌 Current state:', state)
+    console.log('🔌 Current state:', stateRef.current, 'Connecting:', connectingRef.current, 'Connected:', isConnectedRef.current)
     
-    if (state === ConnectionState.CONNECTING || state === ConnectionState.CONNECTED) {
-      console.log('🔌 Already connecting or connected, skipping')
+    // Prevent multiple simultaneous connections using multiple guards
+    if (isConnectedRef.current || connectingRef.current || 
+        stateRef.current === ConnectionState.CONNECTING || 
+        stateRef.current === ConnectionState.CONNECTED) {
+      console.log('🔌 Already connecting or connected, skipping. State:', stateRef.current)
       return
     }
+
+    // Set connecting flag immediately
+    connectingRef.current = true
 
     // Validate required config (token will be generated if not provided)
     if (!config.room || !config.identity) {
@@ -142,108 +155,34 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
         identity: config.identity
       }
 
-      // Try to get token from token server, fallback to development mode
+      // Get token from server or use provided token
       let token: string
       if (config.token) {
         token = config.token
       } else {
-        // Try to fetch token from backend server
-        try {
-          const tokenServerUrl = process.env.NEXT_PUBLIC_TOKEN_SERVER_URL || 'http://localhost:3003'
-          const response = await fetch(`${tokenServerUrl}/token`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              room: config.room,
-              identity: config.identity
-            })
-          })
-          
-          if (response.ok) {
-            const data = await response.json()
-            token = data.token
-            console.log('🎫 Got valid token from server')
-          } else {
-            throw new Error(`Token server error: ${response.status}`)
-          }
-        } catch (tokenError) {
-          // Development mode fallback: simulate token generation
-          console.log('🔧 Development mode: Using mock token (Python backend not connected)')
-          console.warn('Token fetch failed:', tokenError)
-          token = `dev-token-${config.room}-${config.identity}-${Date.now()}`
-        }
-      }
-
-      // Check if we're in development mode (using mock token because backend failed)
-      const isDevelopmentMode = token.startsWith('dev-token-')
-
-      if (isDevelopmentMode) {
-        console.log('🔧 Development Mode: Simulating LiveKit connection')
-        // Simulate connection delay
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        // Create mock room for development mode
-        const mockRoom = {
-          __mockRoom: true,
-          localParticipant: {
-            publishData: async (data: any, options: any) => {
-              console.log('🔧 Mock publishData called:', { data, options })
-              return Promise.resolve()
-            }
+        // Fetch token from backend server
+        const tokenServerUrl = process.env.NEXT_PUBLIC_TOKEN_SERVER_URL || 'http://localhost:3003'
+        const response = await fetch(`${tokenServerUrl}/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-          state: 'connected',
-          disconnect: async () => {
-            console.log('🔧 Mock disconnect called')
-            return Promise.resolve()
-          }
+          body: JSON.stringify({
+            room: config.room,
+            identity: config.identity
+          })
+        })
+        
+        if (!response.ok) {
+          throw new Error(`Token server error: ${response.status} ${response.statusText}`)
         }
         
-        // Set connected state and mock room reference
-        setState(ConnectionState.CONNECTED)
-        setRoomName(config.room || null)
-        isConnectedRef.current = true
-        roomRef.current = mockRoom as any // Mock room for development
-
-        // Create local participant
-        const localParticipant: Participant = {
-          id: `local_${config.identity}`,
-          identity: config.identity || 'testuser',
-          name: config.identity || 'testuser',
-          isLocal: true,
-          connectionState: 'connected',
-          joinedAt: new Date(),
-          lastSeen: new Date(),
-          audioEnabled: false,
-          videoEnabled: false,
-          screenShareEnabled: false,
-          isSpeaking: false
-        }
-
-        // Create mock AI agent participant
-        const agentParticipant: Participant = {
-          id: 'agent_ai_assistant',
-          identity: 'AI-Assistant',
-          name: 'AI Assistant',
-          isLocal: false,
-          connectionState: 'connected',
-          joinedAt: new Date(),
-          lastSeen: new Date(),
-          audioEnabled: false,
-          videoEnabled: false,
-          screenShareEnabled: false,
-          isSpeaking: false
-        }
-
-        setLocalParticipant(localParticipant)
-        setParticipants([localParticipant, agentParticipant])
-        setMessages([createSystemMessage(`Connected to room: ${config.room} (Development Mode)`)])
-        
-        return
+        const data = await response.json()
+        token = data.token
+        console.log('🎫 Got valid token from server')
       }
 
-      // Initialize LiveKit Room (Production mode)
+      // Initialize LiveKit Room
       console.log('🏗️ Creating LiveKit room with data-only configuration...')
       const room = new Room({
         ...defaultRoomOptions,
@@ -273,7 +212,10 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
         setState(ConnectionState.DISCONNECTED)
         isConnectedRef.current = false
         
-        // Attempt reconnection if disconnected unexpectedly
+        // TEMPORARILY DISABLED: Automatic reconnection (causing flickering)
+        // TODO: Re-enable with better stability checks once connection is stable
+        console.log('🔄 Automatic reconnection disabled to prevent flickering')
+        /*
         if (reason && reason !== DisconnectReason.CLIENT_INITIATED && reconnectAttemptsRef.current < maxReconnectAttempts) {
           console.log('🔄 Unexpected disconnection, attempting to reconnect...')
           attemptReconnect()
@@ -282,6 +224,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
           setState(ConnectionState.ERROR)
           setError('Connection lost and max reconnection attempts reached')
         }
+        */
       })
 
       room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
@@ -357,6 +300,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       await Promise.race([connectionPromise, timeoutPromise])
       roomRef.current = room
       isConnectedRef.current = true
+      connectingRef.current = false // Clear connecting flag on success
 
       console.log('✅ Successfully connected to LiveKit room:', config.room)
       console.log('✅ Room state:', room.state)
@@ -374,11 +318,12 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       setState(ConnectionState.ERROR)
       setError(err instanceof Error ? err.message : 'Connection failed')
       isConnectedRef.current = false
+      connectingRef.current = false // Clear connecting flag on error
       
       // Don't throw the error to prevent app crashes, just log it
       return
     }
-  }, [state, config.room, config.identity, config.token, config.serverUrl, convertParticipant, generateMessageId, createSystemMessage])
+  }, [config.room, config.identity, config.token, config.serverUrl, convertParticipant, generateMessageId, createSystemMessage])
 
   /**
    * Automatic reconnection with exponential backoff
@@ -401,19 +346,20 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
     
     reconnectTimeoutRef.current = setTimeout(async () => {
       try {
+        // Call connect function directly without depending on it in useCallback
         await connect()
       } catch (err) {
         console.error('❌ Reconnection attempt failed:', err)
         await attemptReconnect() // Try again
       }
     }, delay)
-  }, [connect])
+  }, []) // Remove connect dependency to prevent recreation
 
   /**
    * Disconnect from LiveKit room
    */
   const disconnect = useCallback(async (): Promise<void> => {
-    if (state === ConnectionState.DISCONNECTED) {
+    if (stateRef.current === ConnectionState.DISCONNECTED) {
       return
     }
     try {
@@ -421,15 +367,13 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       
       // Disconnect from LiveKit room
       if (roomRef.current) {
-        // Check if it's a mock room
-        if (!(roomRef.current as any).__mockRoom) {
-          await roomRef.current.disconnect()
-        }
+        await roomRef.current.disconnect()
         roomRef.current = null
       }
 
       setState(ConnectionState.DISCONNECTED)
       isConnectedRef.current = false
+      connectingRef.current = false // Clear connecting flag
 
       // Clear state
       setMessages([])
@@ -459,7 +403,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
    * Send message to room participants
    */
   const sendMessage = useCallback(async (text: string): Promise<void> => {
-    if (state !== ConnectionState.CONNECTED || !localParticipant) {
+    if (stateRef.current !== ConnectionState.CONNECTED || !isConnectedRef.current) {
       throw new Error('Not connected to room')
     }
 
@@ -467,50 +411,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       throw new Error('Message cannot be empty')
     }
     try {
-      // Check if we're in development mode (consistent with connect function)
-      const isDevelopmentMode = !roomRef.current || 
-                               (roomRef.current as any).__mockRoom === true
-
-      if (isDevelopmentMode ) {
-        // Development mode: Add message directly to local state
-        const newMessage: Message = {
-          id: generateMessageId(),
-          text: text.trim(),
-          sender: {
-            id: localParticipant.id,
-            identity: localParticipant.identity,
-            name: localParticipant.name,
-            isLocal: true
-          },
-          timestamp: new Date(),
-          type: 'text'
-        }
-
-        setMessages(prev => [...prev, newMessage])
-        
-        // Simulate bot response in development mode
-        setTimeout(() => {
-          if (isConnectedRef.current) {
-            const botMessage: Message = {
-              id: generateMessageId(),
-              text: `Bot response to: "${text.trim()}" (This is a development simulation. Connect Python backend for AI responses.)`,
-              sender: {
-                id: 'bot-dev',
-                identity: 'AI-Assistant-Dev',
-                name: 'AI Assistant (Dev)',
-                isLocal: false
-              },
-              timestamp: new Date(),
-              type: 'text'
-            }
-            setMessages(prev => [...prev, botMessage])
-          }
-        }, 1000)
-        
-        return
-      }
-
-      // Production mode: Send data using LiveKit
+      // Send data using LiveKit
       if (!roomRef.current) {
         throw new Error('Room not connected')
       }
@@ -518,14 +419,17 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       const messageData = createMessageData(text.trim(), config.identity || 'unknown')
       await roomRef.current.localParticipant.publishData(messageData, { reliable: true })
 
+      // Get current local participant from room instead of state (to avoid null issues)
+      const currentLocalParticipant = roomRef.current.localParticipant
+
       // Add message to local state (for immediate display)
       const newMessage: Message = {
         id: generateMessageId(),
         text: text.trim(),
         sender: {
-          id: localParticipant.id,
-          identity: localParticipant.identity,
-          name: localParticipant.name,
+          id: currentLocalParticipant.sid || config.identity || 'unknown',
+          identity: currentLocalParticipant.identity,
+          name: currentLocalParticipant.name || currentLocalParticipant.identity,
           isLocal: true
         },
         timestamp: new Date(),
@@ -560,7 +464,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       console.error('❌ Failed to send message:', err)
       throw new Error(err instanceof Error ? err.message : 'Failed to send message')
     }
-  }, [state, localParticipant, config.identity, generateMessageId])
+  }, [config.identity, generateMessageId])
 
   /**
    * Toggle audio (placeholder for future implementation)

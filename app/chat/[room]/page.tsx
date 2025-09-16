@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -54,8 +54,8 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
   const decodedRoom = decodeURIComponent(room)
   const decodedUsername = decodeURIComponent(username)
 
-  // LiveKit configuration
-  const liveKitConfig: LiveKitConfig = {
+  // Memoize LiveKit configuration to prevent unnecessary re-renders
+  const liveKitConfig: LiveKitConfig = useMemo(() => ({
     token: '', // Will be generated in the hook
     room: room,
     identity: decodedUsername,
@@ -67,7 +67,7 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
         videoEnabled: false
       }
     }
-  }
+  }), [room, decodedUsername])
 
   // Use LiveKit hook
   const {
@@ -87,30 +87,37 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
     console.log('🧪 TEST useEffect is running!')
   }, [])
 
+  // Track if connection has been attempted to prevent multiple calls
+  const connectionAttemptedRef = useRef(false)
+
   // Auto-connect on component mount
   useEffect(() => {
     console.log('🔌 ChatRoomPage: useEffect triggered - attempting connection')
     console.log('🔌 ChatRoomPage: Current state:', state)
     console.log('🔌 ChatRoomPage: Connect function available:', !!connect)
     console.log('🔌 ChatRoomPage: Room:', room, 'Username:', decodedUsername)
+    console.log('🔌 ChatRoomPage: Connection attempted:', connectionAttemptedRef.current)
     
     if (!connect || !room || !decodedUsername) {
       console.log('🔌 ChatRoomPage: Missing requirements for connection')
       return
     }
     
-    // Only connect if not already connected/connecting
-    if (state === ConnectionState.DISCONNECTED) {
-      console.log('🔌 ChatRoomPage: Starting connection...')
+    // Only connect once and only if disconnected
+    if (state === ConnectionState.DISCONNECTED && !connectionAttemptedRef.current) {
+      console.log('🔌 ChatRoomPage: Starting connection (first attempt)...')
+      connectionAttemptedRef.current = true
       connect().then(() => {
         console.log('🔌 ChatRoomPage: Connection successful')
       }).catch((error) => {
         console.error('🔌 ChatRoomPage: Connection failed:', error)
+        // Reset on failure to allow retry
+        connectionAttemptedRef.current = false
       })
     } else {
-      console.log('🔌 ChatRoomPage: Not connecting because state is:', state)
+      console.log('🔌 ChatRoomPage: Not connecting because state is:', state, 'or already attempted:', connectionAttemptedRef.current)
     }
-  }, [connect, state, room, decodedUsername])
+  }, [state, room, decodedUsername]) // Remove 'connect' from dependencies to prevent infinite loops
 
   // Connection status
   const isConnected = state === ConnectionState.CONNECTED

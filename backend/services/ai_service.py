@@ -16,18 +16,10 @@ class AIService:
     
     def __init__(self):
         """Initialize the AI service with OpenAI client."""
-        try:
-            self.client = AsyncOpenAI(
-                api_key=os.getenv('OPENAI_API_KEY')
-            )
-            self.logger = logging.getLogger(__name__)
-            self.model = "gpt-3.5-turbo"  # Use GPT-3.5-turbo for faster responses
-            self.logger.info("AIService initialized with OpenAI")
-        except Exception as e:
-            # Fallback to simple responses if OpenAI fails
-            self.logger = logging.getLogger(__name__)
-            self.client = None
-            self.logger.warning(f"OpenAI initialization failed: {e}. Using fallback responses.")
+        self.logger = logging.getLogger(__name__)
+        # Temporarily disable OpenAI to avoid compatibility issues
+        self.client = None
+        self.logger.info("AIService initialized in fallback mode (OpenAI temporarily disabled due to compatibility issues)")
     
     async def generate_response(self, message: str, context: List[Dict[str, Any]]) -> str:
         """
