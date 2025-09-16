@@ -9,8 +9,8 @@ import { UserList } from '@/components/chat/user-list'
 import { MessageList } from '@/components/chat/message-list'
 import { MessageInput } from '@/components/chat/message-input'
 import { MessageCircle, Wifi, WifiOff, Loader2 } from 'lucide-react'
-import useLiveKit from '@/hooks/useLiveKit'
-import { ConnectionState, LiveKitConfig, ChatPageProps } from '@/lib/types'
+import useLiveKit, { ConnectionState } from '@/hooks/useLiveKit'
+import { LiveKitConfig, ChatPageProps } from '@/lib/types'
 
 // Add this export to allow dynamic parameters
 export const dynamicParams = true

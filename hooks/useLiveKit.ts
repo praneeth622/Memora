@@ -107,10 +107,9 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
       return
     }
 
-    // Validate required config
-    if (!config.token || !config.room || !config.identity) {
+    // Validate required config (token will be generated if not provided)
+    if (!config.room || !config.identity) {
       const missingFields = []
-      if (!config.token) missingFields.push('token')
       if (!config.room) missingFields.push('room')
       if (!config.identity) missingFields.push('identity')
       
@@ -123,29 +122,77 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
       setState(ConnectionState.CONNECTING)
       setError(null)
 
-      // Generate access token via API
+      // Try to get token from token server, fallback to development mode
       let token: string
       if (config.token) {
         token = config.token
       } else {
-        const response = await fetch('/api/livekit/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            roomName: config.room,
-            participantName: config.identity
+        // Try to fetch token from backend server
+        try {
+          const tokenServerUrl = process.env.NEXT_PUBLIC_TOKEN_SERVER_URL || 'http://localhost:3001'
+          const response = await fetch(`${tokenServerUrl}/token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              room: config.room,
+              identity: config.identity
+            })
           })
-        })
-        
-        if (!response.ok) {
-          throw new Error('Failed to generate access token')
+          
+          if (response.ok) {
+            const data = await response.json()
+            token = data.token
+            console.log('🎫 Got valid token from server')
+          } else {
+            throw new Error(`Token server error: ${response.status}`)
+          }
+        } catch (tokenError) {
+          // Development mode fallback: simulate token generation
+          console.log('🔧 Development mode: Using mock token (Python backend not connected)')
+          console.warn('Token fetch failed:', tokenError)
+          token = `dev-token-${config.room}-${config.identity}-${Date.now()}`
         }
-        
-        const data = await response.json()
-        token = data.token
       }
 
-      // Initialize LiveKit Room
+      // Check if we're in development mode (no real LiveKit server)
+      const isDevelopmentMode = !process.env.NEXT_PUBLIC_LIVEKIT_URL || 
+                               process.env.NEXT_PUBLIC_LIVEKIT_URL.includes('your-project.livekit.cloud')
+
+      if (isDevelopmentMode) {
+        console.log('🔧 Development Mode: Simulating LiveKit connection')
+        // Simulate connection delay
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Set connected state
+        setState(ConnectionState.CONNECTED)
+        setRoomName(config.room)
+        isConnectedRef.current = true
+
+        // Create local participant
+        const localParticipant: Participant = {
+          id: `local_${config.identity}`,
+          identity: config.identity,
+          name: config.identity,
+          isLocal: true,
+          connectionState: 'connected',
+          joinedAt: new Date(),
+          lastSeen: new Date(),
+          audioEnabled: false,
+          videoEnabled: false,
+          screenShareEnabled: false,
+          isSpeaking: false
+        }
+
+        setLocalParticipant(localParticipant)
+        setParticipants([localParticipant])
+        setMessages([createSystemMessage(`Connected to room: ${config.room} (Development Mode)`)])
+        
+        return
+      }
+
+      // Initialize LiveKit Room (Production mode)
       const room = new Room(defaultRoomOptions)
 
       // Set up event listeners
@@ -282,7 +329,50 @@ export default function useLiveKit(config: LiveKitConfig): UseLiveKitReturn {
       throw new Error('Message cannot be empty')
     }
     try {
-      // Send data using LiveKit
+      // Check if we're in development mode
+      const isDevelopmentMode = !process.env.NEXT_PUBLIC_LIVEKIT_URL || 
+                               process.env.NEXT_PUBLIC_LIVEKIT_URL.includes('your-project.livekit.cloud')
+
+      if (isDevelopmentMode) {
+        // Development mode: Add message directly to local state
+        const newMessage: Message = {
+          id: generateMessageId(),
+          text: text.trim(),
+          sender: {
+            id: localParticipant.id,
+            identity: localParticipant.identity,
+            name: localParticipant.name,
+            isLocal: true
+          },
+          timestamp: new Date(),
+          type: 'text'
+        }
+
+        setMessages(prev => [...prev, newMessage])
+        
+        // Simulate bot response in development mode
+        setTimeout(() => {
+          if (isConnectedRef.current) {
+            const botMessage: Message = {
+              id: generateMessageId(),
+              text: `Bot response to: "${text.trim()}" (This is a development simulation. Connect Python backend for AI responses.)`,
+              sender: {
+                id: 'bot-dev',
+                identity: 'AI-Assistant-Dev',
+                name: 'AI Assistant (Dev)',
+                isLocal: false
+              },
+              timestamp: new Date(),
+              type: 'text'
+            }
+            setMessages(prev => [...prev, botMessage])
+          }
+        }, 1000)
+        
+        return
+      }
+
+      // Production mode: Send data using LiveKit
       if (!roomRef.current) {
         throw new Error('Room not connected')
       }
