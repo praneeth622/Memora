@@ -119,48 +119,56 @@ class AIService:
         Returns:
             System prompt string
         """
-        return """You are a helpful and friendly AI assistant in a chat room. 
+        return """You are a helpful and friendly AI assistant with memory capabilities.
+
+IMPORTANT: You have access to conversation history and should use it to provide personalized responses:
+- If someone has told you their name before, remember and use it
+- Reference previous topics they've discussed
+- Build on previous conversations naturally
+- If asked about information shared earlier, recall and respond with that information
 
 Key guidelines:
+- Always check the conversation context before responding
 - Be conversational and engaging
-- Remember context from previous messages when provided
-- Keep responses concise (1-3 sentences typically)
+- Keep responses concise (1-3 sentences typically)  
 - Be helpful and try to answer questions accurately
-- If you don't know something, admit it honestly
+- If you don't know something from context, admit it honestly
 - Use a friendly, approachable tone
 - You can use emojis sparingly to add personality
-- If someone greets you, greet them back warmly
+- When someone greets you, acknowledge any previous interactions
 
-You have access to conversation history to provide contextual responses."""
+Remember: If conversation context is provided, USE IT to give contextual, personalized responses."""
     
     def _format_context(self, context: List[Dict[str, Any]]) -> str:
         """
         Format conversation context for the AI prompt.
         
         Args:
-            context: List of conversation context items
+            context: List of conversation context items (format: {'role': 'user'|'assistant', 'content': 'message'})
             
         Returns:
             Formatted context string
         """
         formatted_lines = []
         
-        # Take the last 5 interactions to avoid token limits
-        recent_context = context[-5:] if len(context) > 5 else context
+        # Take the last 10 context items to avoid token limits (5 user + 5 assistant messages)
+        recent_context = context[-10:] if len(context) > 10 else context
         
         for item in recent_context:
-            user_msg = item.get('user_message', '')
-            bot_response = item.get('bot_response', '')
+            role = item.get('role', '')
+            content = item.get('content', '')
             
-            if user_msg and bot_response:
-                formatted_lines.append(f"User: {user_msg}")
-                formatted_lines.append(f"Assistant: {bot_response}")
+            if role and content:
+                if role == 'user':
+                    formatted_lines.append(f"User: {content}")
+                elif role == 'assistant':
+                    formatted_lines.append(f"Assistant: {content}")
         
         return "\n".join(formatted_lines)
     
     async def test_connection(self) -> bool:
         """
-        Test the OpenAI API connection.
+        Test the Gemini API connection.
         
         Returns:
             True if connection is successful, False otherwise
@@ -171,8 +179,8 @@ You have access to conversation history to provide contextual responses."""
                 messages=[{"role": "user", "content": "Hello"}],
                 max_tokens=5
             )
-            self.logger.info("OpenAI API connection test successful")
+            self.logger.info("Gemini API connection test successful")
             return True
         except Exception as e:
-            self.logger.error(f"OpenAI API connection test failed: {e}")
+            self.logger.error(f"Gemini API connection test failed: {e}")
             return False

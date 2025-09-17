@@ -1,14 +1,27 @@
 import asyncio
 import json
 import logging
+import os
 from dotenv import load_dotenv
 from livekit import agents, rtc
 from livekit.agents import JobContext, WorkerOptions, cli
 from services.message_handler import MessageHandler
 
-load_dotenv()
+# Load .env file from the correct path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, '.env')
+load_dotenv(env_path)
+
+# Debug: verify API keys are loaded
+import os
+mem0_key = os.getenv('MEM0_API_KEY', 'NOT_SET')
+gemini_key = os.getenv('GEMINI_API_KEY', 'NOT_SET')
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+logger.info(f"🔑 Environment check - MEM0_API_KEY: {'SET' if mem0_key != 'NOT_SET' else 'NOT_SET'}")
+logger.info(f"🔑 Environment check - GEMINI_API_KEY: {'SET' if gemini_key != 'NOT_SET' else 'NOT_SET'}")
 
 class ChatAgent:
     def __init__(self):
