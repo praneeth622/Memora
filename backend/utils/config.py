@@ -17,8 +17,8 @@ class Config:
     LIVEKIT_API_KEY: str = os.getenv('LIVEKIT_API_KEY', '')
     LIVEKIT_API_SECRET: str = os.getenv('LIVEKIT_API_SECRET', '')
     
-    # OpenAI Configuration  
-    OPENAI_API_KEY: str = os.getenv('OPENAI_API_KEY', '')
+    # Gemini AI Configuration  
+    GEMINI_API_KEY: str = os.getenv('GEMINI_API_KEY', '')
     
     # mem0 Configuration
     MEM0_API_KEY: str = os.getenv('MEM0_API_KEY', '')
@@ -43,8 +43,8 @@ class Config:
             missing.append('LIVEKIT_API_KEY') 
         if not cls.LIVEKIT_API_SECRET:
             missing.append('LIVEKIT_API_SECRET')
-        if not cls.OPENAI_API_KEY:
-            missing.append('OPENAI_API_KEY')
+        if not cls.GEMINI_API_KEY:
+            missing.append('GEMINI_API_KEY')
             
         return len(missing) == 0, missing
     
@@ -55,7 +55,7 @@ class Config:
         print(f"  LIVEKIT_URL: {'✅' if cls.LIVEKIT_URL else '❌'}")
         print(f"  LIVEKIT_API_KEY: {'✅' if cls.LIVEKIT_API_KEY else '❌'}")
         print(f"  LIVEKIT_API_SECRET: {'✅' if cls.LIVEKIT_API_SECRET else '❌'}")
-        print(f"  OPENAI_API_KEY: {'✅' if cls.OPENAI_API_KEY else '❌'}")
+        print(f"  GEMINI_API_KEY: {'✅' if cls.GEMINI_API_KEY else '❌'}")
         print(f"  MEM0_API_KEY: {'✅' if cls.MEM0_API_KEY else '❌'} (Optional)")
         print(f"  LOG_LEVEL: {cls.LOG_LEVEL}")
         print(f"  AGENT_NAME: {cls.AGENT_NAME}")

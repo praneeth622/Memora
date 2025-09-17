@@ -1,38 +1,39 @@
 """
-AI Service for generating contextual responses using OpenAI API.
+AI Service for generating contextual responses using Gemini AI API.
 """
 
 import logging
 import os
 from typing import List, Dict, Any
-from openai import AsyncOpenAI
+import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
 class AIService:
     """
-    Service class for handling AI response generation using OpenAI.
+    Service class for handling AI response generation using Gemini AI.
     """
     
     def __init__(self):
-        """Initialize the AI service with OpenAI client."""
+        """Initialize the AI service with Gemini client."""
         self.logger = logging.getLogger(__name__)
         
-        # Get OpenAI API key from environment
-        api_key = os.getenv('OPENAI_API_KEY')
-        self.model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        # Get Gemini API key from environment
+        api_key = os.getenv('GEMINI_API_KEY')
+        self.model = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')
         
         if not api_key:
-            self.logger.error("OPENAI_API_KEY not found in environment variables")
+            self.logger.error("GEMINI_API_KEY not found in environment variables")
             self.client = None
             self.logger.info("AIService initialized in fallback mode (no API key)")
         else:
             try:
-                # Initialize AsyncOpenAI client
-                self.client = AsyncOpenAI(api_key=api_key)
-                self.logger.info("AIService initialized successfully with OpenAI API")
+                # Configure Gemini AI
+                genai.configure(api_key=api_key)
+                self.client = genai.GenerativeModel(self.model)
+                self.logger.info("AIService initialized successfully with Gemini AI")
             except Exception as e:
-                self.logger.error(f"Failed to initialize OpenAI client: {e}")
+                self.logger.error(f"Failed to initialize Gemini client: {e}")
                 self.logger.error(f"Error details: {type(e).__name__}: {str(e)}")
                 self.client = None
                 self.logger.info("AIService initialized in fallback mode due to initialization error")
@@ -48,7 +49,7 @@ class AIService:
         Returns:
             AI-generated response text
         """
-        # Enhanced fallback responses if OpenAI client failed to initialize
+        # Enhanced fallback responses if Gemini client failed to initialize
         if self.client is None:
             # Create more intelligent fallback responses based on message content
             message_lower = message.lower()
@@ -73,40 +74,36 @@ class AIService:
         
         try:
             # Build the conversation context for the AI
-            messages = [
-                {
-                    "role": "system",
-                    "content": self._get_system_prompt()
-                }
-            ]
+            prompt_parts = [self._get_system_prompt()]
             
             # Add conversation history if available
             if context:
                 context_text = self._format_context(context)
-                messages.append({
-                    "role": "system", 
-                    "content": f"Previous conversation context:\n{context_text}"
-                })
+                prompt_parts.append(f"Previous conversation context:\n{context_text}")
             
             # Add the current user message
-            messages.append({
-                "role": "user",
-                "content": message
-            })
+            prompt_parts.append(f"User message: {message}")
+            prompt_parts.append("Please respond naturally and helpfully:")
             
-            self.logger.info(f"Sending request to OpenAI with {len(messages)} messages")
+            # Combine all parts into a single prompt
+            full_prompt = "\n\n".join(prompt_parts)
             
-            # Generate response using OpenAI
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=150,  # Keep responses concise
-                temperature=0.7,  # Balance creativity and consistency
-                presence_penalty=0.1,  # Slight penalty for repetition
-                frequency_penalty=0.1   # Slight penalty for repeated phrases
+            self.logger.info(f"Sending request to Gemini AI")
+            
+            # Generate response using Gemini
+            import asyncio
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.generate_content(
+                    full_prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        max_output_tokens=150,  # Keep responses concise
+                        temperature=0.7,  # Balance creativity and consistency
+                    )
+                )
             )
             
-            generated_text = response.choices[0].message.content.strip()
+            generated_text = response.text.strip()
             self.logger.info(f"Generated response: {generated_text[:50]}...")
             
             return generated_text

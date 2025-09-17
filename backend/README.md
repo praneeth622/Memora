@@ -28,8 +28,8 @@ LIVEKIT_URL=wss://your-project.livekit.cloud
 LIVEKIT_API_KEY=your_actual_api_key
 LIVEKIT_API_SECRET=your_actual_secret
 
-# OpenAI Configuration
-OPENAI_API_KEY=sk-your_openai_key_here
+# Gemini AI Configuration
+GEMINI_API_KEY=your_gemini_api_key_here
 
 # mem0.ai Configuration (Optional)
 MEM0_API_KEY=your_mem0_key_here
@@ -43,10 +43,10 @@ MEM0_API_KEY=your_mem0_key_here
 3. Get your API Key and Secret from the project settings
 4. Use the WebSocket URL (wss://your-project.livekit.cloud)
 
-#### OpenAI
-1. Go to [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Create an API key
-3. Add credits to your account if needed
+#### Gemini AI
+1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Create an API key for Gemini
+3. No credits needed - has generous free tier
 
 #### mem0.ai (Optional)
 1. Go to [mem0.ai](https://mem0.ai/)

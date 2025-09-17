@@ -249,8 +249,13 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
 
       room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant?: RemoteParticipant) => {
         console.log('📨 Data received from:', participant?.identity || 'unknown')
+        console.log('📦 Raw payload:', payload)
+        
         const messageData = parseMessageData(payload)
+        console.log('📋 Parsed message data:', messageData)
+        
         if (messageData && messageData.type === 'chat-message') {
+          console.log('✅ Valid chat message, creating new message object')
           const newMessage: Message = {
             id: generateMessageId(),
             text: messageData.content,
@@ -263,7 +268,14 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
             timestamp: new Date(messageData.timestamp),
             type: 'text'
           }
-          setMessages(prev => [...prev, newMessage])
+          console.log('📝 New message object:', newMessage)
+          setMessages(prev => {
+            const updated = [...prev, newMessage]
+            console.log('📚 Updated messages array:', updated)
+            return updated
+          })
+        } else {
+          console.log('❌ Invalid or non-chat message data:', messageData)
         }
       })
 

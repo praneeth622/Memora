@@ -16,41 +16,103 @@ class ChatAgent:
         self.room = None
         logger.info("ChatAgent initialized")
         
-    def sync_handle_data_received(self, *args, **kwargs):
+    def handle_data_received_simple(self, data_packet):
+        """Simple test handler to understand the data packet structure"""
         try:
-            logger.info(f"Data received callback called with args: {len(args)}, types: {[type(arg) for arg in args]}")
-            logger.info(f"Data received callback called with kwargs: {kwargs}")
+            logger.info(f"📨 SIMPLE: Data received, type: {type(data_packet)}")
             
-            # Try to extract the data and participant from the arguments
-            if len(args) >= 1:
-                data = args[0]
-                participant = args[1] if len(args) >= 2 else None
+            # Log all attributes of the data packet
+            if hasattr(data_packet, '__dict__'):
+                attrs = list(data_packet.__dict__.keys())
+                logger.info(f"📦 DataPacket attributes: {attrs}")
                 
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                loop.create_task(self.handle_data_received(data, participant, ""))
+                # Try to access common attributes
+                if hasattr(data_packet, 'data'):
+                    logger.info(f"📦 Data length: {len(data_packet.data)} bytes")
+                if hasattr(data_packet, 'participant'):
+                    logger.info(f"📦 Participant: {data_packet.participant}")
+                if hasattr(data_packet, 'participant_identity'):
+                    logger.info(f"📦 Participant identity: {data_packet.participant_identity}")
+                if hasattr(data_packet, 'payload'):
+                    logger.info(f"📦 Payload: {data_packet.payload}")
+                    
+            # Try to process the data with fallback participant
+            if hasattr(data_packet, 'data'):
+                payload = data_packet.data
+                participant = None
+                
+                # Get any available participant
+                if self.room and len(self.room.remote_participants) > 0:
+                    participant = list(self.room.remote_participants.values())[0]
+                    logger.info(f"✅ Using participant: {participant.identity}")
+                    
+                    # Process the message
+                    asyncio.create_task(self.handle_data_received_async(payload, participant))
+                else:
+                    logger.error(f"❌ No participants available in room")
             else:
-                logger.error("No arguments received in data_received callback")
+                logger.error(f"❌ No data attribute found in packet")
+                
         except Exception as e:
-            logger.error(f"Error in sync data handler: {e}")
-            logger.error(f"Parameters received: args={args}, kwargs={kwargs}")
+            logger.error(f"❌ Error in simple handler: {e}")
+            import traceback
+            logger.error(f"📦 Traceback: {traceback.format_exc()}")
     
-    async def handle_data_received(self, data, participant: rtc.RemoteParticipant = None, topic: str = ""):
+    def handle_data_received_wrapper(self, *args, **kwargs):
+        """Flexible wrapper for LiveKit data received events"""
         try:
-            # Fix: DataPacket object has .data attribute, not direct decode method
-            if hasattr(data, 'data'):
-                # data is a DataPacket object
-                text_data = data.data.decode('utf-8')
-                participant_id = participant.identity if participant else "Unknown"
-            else:
-                # data is raw bytes
-                text_data = data.decode('utf-8')
-                participant_id = participant.identity if participant else "Unknown"
+            logger.info(f"📨 Data received - Args: {len(args)}, Arg types: {[type(arg) for arg in args]}")
             
-            logger.info(f"Received data from {participant_id}: {text_data}")
+            # LiveKit passes arguments in different formats depending on SDK version
+            if len(args) >= 1:
+                data_arg = args[0]  # This could be payload or DataPacket
+                
+                # Try to extract payload and participant from args
+                payload = None
+                participant = None
+                
+                if len(args) >= 2:
+                    participant_arg = args[1]
+                    if hasattr(participant_arg, 'identity'):
+                        participant = participant_arg
+                        
+                # Try to determine payload format
+                if isinstance(data_arg, bytes):
+                    payload = data_arg
+                elif hasattr(data_arg, 'data'):
+                    payload = data_arg.data
+                else:
+                    payload = str(data_arg).encode('utf-8')
+                
+                if payload and participant:
+                    logger.info(f"� Processing data from {participant.identity}: {len(payload)} bytes")
+                    
+                    # Create async task
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    
+                    loop.create_task(self.handle_data_received_async(payload, participant))
+                else:
+                    logger.error(f"❌ Could not extract payload or participant from args")
+                    
+            else:
+                logger.error(f"❌ No arguments received in data handler")
+                
+        except Exception as e:
+            logger.error(f"❌ Error in data received wrapper: {e}")
+            logger.error(f"📦 Args: {args}, Kwargs: {kwargs}")
+    
+    async def handle_data_received_async(self, payload: bytes, participant: rtc.RemoteParticipant):
+        """Async handler for processing data packets from participants"""
+        try:
+            # Decode the payload
+            text_data = payload.decode('utf-8')
+            participant_id = participant.identity
+            
+            logger.info(f"📥 Processing data from {participant_id}: {text_data}")
             
             try:
                 message_data = json.loads(text_data)
@@ -59,13 +121,18 @@ class ChatAgent:
                 message_type = message_data.get('type', 'chat')
                 
                 if message_type == 'chat-message' or message_type == 'chat':
+                    logger.info(f"🔄 Processing chat message from {participant_id}: {message_text}")
                     await self.process_chat_message(message_text, participant_id)
+                else:
+                    logger.info(f"ℹ️ Ignoring message type: {message_type}")
             except json.JSONDecodeError:
+                logger.info(f"🔄 Processing plain text from {participant_id}: {text_data}")
                 await self.process_chat_message(text_data, participant_id)
                 
         except Exception as e:
-            logger.error(f"Error handling data received: {e}")
-            logger.error(f"Data type: {type(data)}, Participant: {participant}")
+            logger.error(f"❌ Error in async data handler: {e}")
+            logger.error(f"📦 Payload: {payload}")
+            logger.error(f"👤 Participant: {participant}")
     
     async def process_chat_message(self, message: str, username: str):
         try:
@@ -90,14 +157,14 @@ class ChatAgent:
                 return
                 
             response_data = {
-                "type": "ai_response",
-                "message": response,
-                "from": "AI Assistant",
-                "in_reply_to": original_sender,
-                "timestamp": asyncio.get_event_loop().time()
+                "type": "chat-message",
+                "content": response,
+                "sender": "AI Assistant", 
+                "timestamp": int(asyncio.get_event_loop().time() * 1000)  # Convert to milliseconds
             }
             
             response_json = json.dumps(response_data)
+            logger.info(f"📤 Sending response data: {response_json}")
             await self.room.local_participant.publish_data(response_json.encode('utf-8'), reliable=True)
             logger.info(f"Sent AI response to room (reply to {original_sender})")
         except Exception as e:
@@ -116,7 +183,7 @@ class ChatAgent:
             logger.info(f"📊 Room participants: {len(ctx.room.remote_participants)}")
             
             # Register event handlers with better error handling
-            ctx.room.on("data_received", lambda *args, **kwargs: self.sync_handle_data_received(*args, **kwargs))
+            ctx.room.on("data_received", self.handle_data_received_simple)
             ctx.room.on("participant_connected", self.on_participant_connected)
             ctx.room.on("participant_disconnected", self.on_participant_disconnected)
             
