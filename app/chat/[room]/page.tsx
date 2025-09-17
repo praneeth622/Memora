@@ -17,6 +17,8 @@ export const dynamicParams = true
 
 export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
   console.log('🚀 ChatRoomPage loaded with:', { params, searchParams })
+  console.log('🧪 ChatRoomPage: useRef available:', typeof useRef)
+  console.log('🧪 ChatRoomPage: Component starting render...')
   
   const { room } = params
   const { username } = searchParams
@@ -82,42 +84,36 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
 
   console.log('🎯 ChatRoomPage render - state:', state, 'connect:', !!connect, 'error:', error)
 
-  // Debug: Test useEffect
-  useEffect(() => {
-    console.log('🧪 TEST useEffect is running!')
-  }, [])
+  // Temporarily removed debug useEffects to isolate Fast Refresh issue
 
   // Track if connection has been attempted to prevent multiple calls
   const connectionAttemptedRef = useRef(false)
 
-  // Auto-connect on component mount
+  // Auto-connect with improved error handling and race condition prevention
   useEffect(() => {
-    console.log('🔌 ChatRoomPage: useEffect triggered - attempting connection')
-    console.log('🔌 ChatRoomPage: Current state:', state)
-    console.log('🔌 ChatRoomPage: Connect function available:', !!connect)
-    console.log('🔌 ChatRoomPage: Room:', room, 'Username:', decodedUsername)
-    console.log('🔌 ChatRoomPage: Connection attempted:', connectionAttemptedRef.current)
-    
-    if (!connect || !room || !decodedUsername) {
-      console.log('🔌 ChatRoomPage: Missing requirements for connection')
+    // Only connect if all conditions are met and we haven't already attempted
+    if (!room || !decodedUsername || connectionAttemptedRef.current) {
       return
     }
     
-    // Only connect once and only if disconnected
-    if (state === ConnectionState.DISCONNECTED && !connectionAttemptedRef.current) {
-      console.log('🔌 ChatRoomPage: Starting connection (first attempt)...')
-      connectionAttemptedRef.current = true
-      connect().then(() => {
-        console.log('🔌 ChatRoomPage: Connection successful')
-      }).catch((error) => {
-        console.error('🔌 ChatRoomPage: Connection failed:', error)
-        // Reset on failure to allow retry
-        connectionAttemptedRef.current = false
-      })
-    } else {
-      console.log('🔌 ChatRoomPage: Not connecting because state is:', state, 'or already attempted:', connectionAttemptedRef.current)
+    // Only connect if truly disconnected (not connecting or connected)
+    if (state !== ConnectionState.DISCONNECTED) {
+      return
     }
-  }, [state, room, decodedUsername]) // Remove 'connect' from dependencies to prevent infinite loops
+    
+    console.log('🔌 ChatRoomPage: Attempting to connect...')
+    connectionAttemptedRef.current = true
+    
+    connect().then(() => {
+      console.log('✅ ChatRoomPage: Connection successful')
+    }).catch((error) => {
+      console.error('❌ ChatRoomPage: Connection failed:', error)
+      // Reset connection flag after a delay to allow retry
+      setTimeout(() => {
+        connectionAttemptedRef.current = false
+      }, 2000)
+    })
+  }, [state, room, decodedUsername, connect])
 
   // Connection status
   const isConnected = state === ConnectionState.CONNECTED

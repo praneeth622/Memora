@@ -41,6 +41,13 @@ import {
  */
 export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitReturn {
   console.log('🎣 useLiveKit hook called with config:', config)
+  
+  // Store config in ref to prevent stale closures without affecting dependencies
+  const configRef = useRef(config)
+  useEffect(() => {
+    configRef.current = config
+  }) // Remove config dependency to prevent Fast Refresh issues
+  
   // State management
   const [state, setState] = useState<ConnectionState>(ConnectionState.DISCONNECTED)
   
@@ -110,7 +117,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       timestamp: new Date(),
       type: 'system'
     }
-  }, [generateMessageId])
+  }, []) // Remove dependency on generateMessageId since it has no dependencies
 
 
 
@@ -120,7 +127,8 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
    * Connect to LiveKit room
    */
   const connect = useCallback(async (): Promise<void> => {
-    console.log('🔌 useLiveKit.connect() called with config:', config)
+    const currentConfig = configRef.current
+    console.log('🔌 useLiveKit.connect() called with config:', currentConfig)
     console.log('🔌 Current state:', stateRef.current, 'Connecting:', connectingRef.current, 'Connected:', isConnectedRef.current)
     
     // Prevent multiple simultaneous connections using multiple guards
@@ -131,14 +139,14 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       return
     }
 
-    // Set connecting flag immediately
+    // Set connecting flag immediately to prevent race conditions
     connectingRef.current = true
 
     // Validate required config (token will be generated if not provided)
-    if (!config.room || !config.identity) {
+    if (!currentConfig.room || !currentConfig.identity) {
       const missingFields = []
-      if (!config.room) missingFields.push('room')
-      if (!config.identity) missingFields.push('identity')
+      if (!currentConfig.room) missingFields.push('room')
+      if (!currentConfig.identity) missingFields.push('identity')
       
       const errorMsg = `Missing required configuration: ${missingFields.join(', ')}`
       setState(ConnectionState.ERROR)
@@ -151,14 +159,14 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       
       // Store connection parameters for potential reconnection
       lastConnectionParamsRef.current = {
-        roomName: config.room,
-        identity: config.identity
+        roomName: currentConfig.room,
+        identity: currentConfig.identity
       }
 
       // Get token from server or use provided token
       let token: string
-      if (config.token) {
-        token = config.token
+      if (currentConfig.token) {
+        token = currentConfig.token
       } else {
         // Fetch token from backend server
         const tokenServerUrl = process.env.NEXT_PUBLIC_TOKEN_SERVER_URL || 'http://localhost:3003'
@@ -168,8 +176,8 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            room: config.room,
-            identity: config.identity
+            room: currentConfig.room,
+            identity: currentConfig.identity
           })
         })
         
@@ -192,9 +200,9 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
 
       // Set up event listeners
       room.on(RoomEvent.Connected, () => {
-        console.log('✅ Connected to LiveKit room:', config.room)
+        console.log('✅ Connected to LiveKit room:', currentConfig.room)
         setState(ConnectionState.CONNECTED)
-        setRoomName(config.room || null)
+        setRoomName(currentConfig.room || null)
         isConnectedRef.current = true
 
         // Update participants with all current participants
@@ -204,7 +212,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
         setLocalParticipant(convertParticipant(room.localParticipant))
 
         // Add welcome message
-        setMessages([createSystemMessage(`Connected to room: ${config.room}`)])
+        setMessages([createSystemMessage(`Connected to room: ${currentConfig.room}`)])
       })
 
       room.on(RoomEvent.Disconnected, (reason) => {
@@ -280,7 +288,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       })
 
       // Connect to room with retry logic
-      const serverUrl = config.serverUrl || LIVEKIT_URL
+      const serverUrl = currentConfig.serverUrl || LIVEKIT_URL
       const connectOptions = {
         ...defaultConnectOptions,
         // Use data-only mode for chat application
@@ -298,11 +306,19 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       )
       
       await Promise.race([connectionPromise, timeoutPromise])
+      
+      // Check if component is still mounted after async operation
+      if (!connectingRef.current) {
+        console.log('🔌 Component unmounted during connection, aborting')
+        room.disconnect().catch(() => {}) // Disconnect the room we just connected
+        return
+      }
+      
       roomRef.current = room
       isConnectedRef.current = true
       connectingRef.current = false // Clear connecting flag on success
 
-      console.log('✅ Successfully connected to LiveKit room:', config.room)
+      console.log('✅ Successfully connected to LiveKit room:', currentConfig.room)
       console.log('✅ Room state:', room.state)
       console.log('✅ Local participant:', room.localParticipant.identity)
 
@@ -311,19 +327,27 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       console.error('❌ Error details:', {
         message: err instanceof Error ? err.message : 'Unknown error',
         stack: err instanceof Error ? err.stack : 'No stack trace',
-        serverUrl: config.serverUrl || LIVEKIT_URL,
-        room: config.room,
-        identity: config.identity
+        serverUrl: currentConfig.serverUrl || LIVEKIT_URL,
+        room: currentConfig.room,
+        identity: currentConfig.identity
       })
+      
+      // Clean up state on error
       setState(ConnectionState.ERROR)
       setError(err instanceof Error ? err.message : 'Connection failed')
       isConnectedRef.current = false
       connectingRef.current = false // Clear connecting flag on error
       
+      // Clean up any partially created room
+      if (roomRef.current) {
+        roomRef.current.disconnect().catch(() => {})
+        roomRef.current = null
+      }
+      
       // Don't throw the error to prevent app crashes, just log it
       return
     }
-  }, [config.room, config.identity, config.token, config.serverUrl, convertParticipant, generateMessageId, createSystemMessage])
+  }, []) // Simplified dependencies to prevent function recreation
 
   /**
    * Automatic reconnection with exponential backoff
@@ -416,7 +440,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
         throw new Error('Room not connected')
       }
 
-      const messageData = createMessageData(text.trim(), config.identity || 'unknown')
+      const messageData = createMessageData(text.trim(), configRef.current.identity || 'unknown')
       await roomRef.current.localParticipant.publishData(messageData, { reliable: true })
 
       // Get current local participant from room instead of state (to avoid null issues)
@@ -427,7 +451,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
         id: generateMessageId(),
         text: text.trim(),
         sender: {
-          id: currentLocalParticipant.sid || config.identity || 'unknown',
+          id: currentLocalParticipant.sid || configRef.current.identity || 'unknown',
           identity: currentLocalParticipant.identity,
           name: currentLocalParticipant.name || currentLocalParticipant.identity,
           isLocal: true
@@ -464,7 +488,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       console.error('❌ Failed to send message:', err)
       throw new Error(err instanceof Error ? err.message : 'Failed to send message')
     }
-  }, [config.identity, generateMessageId])
+  }, []) // Simplified dependencies to prevent function recreation
 
   /**
    * Toggle audio (placeholder for future implementation)
@@ -619,21 +643,29 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
   // }, [])
 
   /**
-   * Cleanup effect
+   * Cleanup effect - Properly disconnect when component unmounts
    */
   useEffect(() => {
     return () => {
-      // Cleanup on unmount
+      console.log('🧹 useLiveKit cleanup: Component unmounting')
+      // Mark as disconnected immediately to prevent new connections
       isConnectedRef.current = false
+      connectingRef.current = false
       
+      // Clear any timeouts
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
       }
       
-      // TODO: Disconnect from room if connected
-      // if (roomRef.current) {
-      //   roomRef.current.disconnect()
-      // }
+      // Disconnect from room if connected (prevents WebRTC errors)
+      if (roomRef.current) {
+        console.log('🧹 useLiveKit cleanup: Disconnecting from room')
+        roomRef.current.disconnect().catch((err) => {
+          console.warn('🧹 Error during room disconnect:', err)
+        })
+        roomRef.current = null
+      }
     }
   }, [])
 
@@ -657,7 +689,8 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
   //   }
   // }, [state, config.token, connect])
 
-  // Cleanup effect
+  // Cleanup effect - TEMPORARILY DISABLED FOR DEBUGGING
+  /*
   useEffect(() => {
     return () => {
       // Cleanup on unmount
@@ -669,6 +702,7 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
       }
     }
   }, [])
+  */
 
   // Return hook interface
   console.log('🎣 useLiveKit returning functions:', {
