@@ -54,10 +54,11 @@ class ChatAgent:
             
             try:
                 message_data = json.loads(text_data)
-                message_text = message_data.get('message', text_data)
+                # Support both 'content' and 'message' field names for compatibility
+                message_text = message_data.get('content') or message_data.get('message', text_data)
                 message_type = message_data.get('type', 'chat')
                 
-                if message_type == 'chat':
+                if message_type == 'chat-message' or message_type == 'chat':
                     await self.process_chat_message(message_text, participant_id)
             except json.JSONDecodeError:
                 await self.process_chat_message(text_data, participant_id)
