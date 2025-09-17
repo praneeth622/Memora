@@ -18,9 +18,24 @@ class MemoryService:
     def __init__(self):
         """Initialize the memory service with mem0 client."""
         self.logger = logging.getLogger(__name__)
-        # Temporarily disable mem0 to avoid compatibility issues
-        self.memory = None
-        self.logger.info("MemoryService initialized in fallback mode (mem0 temporarily disabled due to compatibility issues)")
+        
+        # Get mem0 API key from environment
+        api_key = os.getenv('MEM0_API_KEY')
+        
+        if not api_key:
+            self.logger.warning("MEM0_API_KEY not found in environment variables")
+            self.memory = None
+            self.logger.info("MemoryService initialized in fallback mode (no API key)")
+        else:
+            try:
+                # Try simple Memory initialization first
+                self.memory = Memory()
+                self.logger.info("MemoryService initialized successfully with mem0.ai")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize mem0 client: {e}")
+                self.logger.error(f"Error details: {type(e).__name__}: {str(e)}")
+                self.memory = None
+                self.logger.info("MemoryService initialized in fallback mode due to initialization error")
     
     async def get_user_context(self, username: str) -> List[Dict[str, Any]]:
         """

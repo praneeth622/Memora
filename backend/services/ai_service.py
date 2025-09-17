@@ -17,9 +17,25 @@ class AIService:
     def __init__(self):
         """Initialize the AI service with OpenAI client."""
         self.logger = logging.getLogger(__name__)
-        # Temporarily disable OpenAI to avoid compatibility issues
-        self.client = None
-        self.logger.info("AIService initialized in fallback mode (OpenAI temporarily disabled due to compatibility issues)")
+        
+        # Get OpenAI API key from environment
+        api_key = os.getenv('OPENAI_API_KEY')
+        self.model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        
+        if not api_key:
+            self.logger.error("OPENAI_API_KEY not found in environment variables")
+            self.client = None
+            self.logger.info("AIService initialized in fallback mode (no API key)")
+        else:
+            try:
+                # Initialize AsyncOpenAI client
+                self.client = AsyncOpenAI(api_key=api_key)
+                self.logger.info("AIService initialized successfully with OpenAI API")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize OpenAI client: {e}")
+                self.logger.error(f"Error details: {type(e).__name__}: {str(e)}")
+                self.client = None
+                self.logger.info("AIService initialized in fallback mode due to initialization error")
     
     async def generate_response(self, message: str, context: List[Dict[str, Any]]) -> str:
         """
@@ -32,16 +48,28 @@ class AIService:
         Returns:
             AI-generated response text
         """
-        # Fallback responses if OpenAI client failed to initialize
+        # Enhanced fallback responses if OpenAI client failed to initialize
         if self.client is None:
-            fallback_responses = [
-                f"Thanks for your message: '{message}'. I'm currently running in fallback mode, but I'm here to help!",
-                f"I received your message about: {message}. The AI service is initializing, but I can still chat with you!",
-                f"Hello! You mentioned: '{message}'. I'm your AI assistant, currently in simple response mode.",
-                f"I see you said: '{message}'. I'm working on getting my full AI capabilities online!"
-            ]
-            import random
-            return random.choice(fallback_responses)
+            # Create more intelligent fallback responses based on message content
+            message_lower = message.lower()
+            
+            if any(word in message_lower for word in ['hello', 'hi', 'hey', 'greetings']):
+                return f"Hello! I received your greeting: '{message}'. I'm your AI assistant, currently running in fallback mode while we resolve some compatibility issues, but I'm here to help!"
+            elif any(word in message_lower for word in ['help', 'assist', 'support']):
+                return f"I'd be happy to help! You asked: '{message}'. While my full AI capabilities are being restored, I can still provide basic assistance."
+            elif any(word in message_lower for word in ['thank', 'thanks']):
+                return f"You're welcome! I'm glad I could help. You said: '{message}'. I'm working on getting my advanced AI features online soon!"
+            elif '?' in message:
+                return f"That's a great question: '{message}'. I'm currently in simplified response mode due to some technical issues, but I'm working on providing better answers soon!"
+            else:
+                fallback_responses = [
+                    f"Thanks for your message: '{message}'. I'm currently running in fallback mode, but I'm here to help!",
+                    f"I received your message: '{message}'. My AI service is temporarily simplified, but I can still chat with you!",
+                    f"I understand you said: '{message}'. I'm your AI assistant, working on restoring full capabilities!",
+                    f"Interesting message: '{message}'. I'm processing in basic mode while technical issues are resolved!"
+                ]
+                import random
+                return random.choice(fallback_responses)
         
         try:
             # Build the conversation context for the AI

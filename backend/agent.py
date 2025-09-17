@@ -38,10 +38,18 @@ class ChatAgent:
             logger.error(f"Error in sync data handler: {e}")
             logger.error(f"Parameters received: args={args}, kwargs={kwargs}")
     
-    async def handle_data_received(self, data: bytes, participant: rtc.RemoteParticipant = None, topic: str = ""):
+    async def handle_data_received(self, data, participant: rtc.RemoteParticipant = None, topic: str = ""):
         try:
-            text_data = data.decode('utf-8')
-            participant_id = participant.identity if participant else "Unknown"
+            # Fix: DataPacket object has .data attribute, not direct decode method
+            if hasattr(data, 'data'):
+                # data is a DataPacket object
+                text_data = data.data.decode('utf-8')
+                participant_id = participant.identity if participant else "Unknown"
+            else:
+                # data is raw bytes
+                text_data = data.decode('utf-8')
+                participant_id = participant.identity if participant else "Unknown"
+            
             logger.info(f"Received data from {participant_id}: {text_data}")
             
             try:
@@ -56,16 +64,23 @@ class ChatAgent:
                 
         except Exception as e:
             logger.error(f"Error handling data received: {e}")
+            logger.error(f"Data type: {type(data)}, Participant: {participant}")
     
     async def process_chat_message(self, message: str, username: str):
         try:
-            logger.info(f"Processing chat message from {username}: {message}")
+            logger.info(f"🔄 Processing chat message from {username}: {message}")
+            
+            # Use the message handler to process with AI and memory
             response = await self.message_handler.process_message(message, username)
-            logger.info(f"Generated AI response: {response}")
+            
+            logger.info(f"🤖 Generated AI response: {response[:100]}...")
             await self.send_response(response, username)
+            
         except Exception as e:
-            logger.error(f"Error processing chat message: {e}")
-            await self.send_response("I encountered an error. Please try again.", username)
+            logger.error(f"❌ Error processing chat message: {e}")
+            # Send a helpful error message
+            error_response = "I'm having trouble processing your message right now. Please try asking again!"
+            await self.send_response(error_response, username)
     
     async def send_response(self, response: str, original_sender: str):
         try:
@@ -89,26 +104,50 @@ class ChatAgent:
     
     async def entrypoint(self, ctx: JobContext):
         try:
-            logger.info(f"Connecting to room: {ctx.room.name}")
-            await ctx.connect()
-            self.room = ctx.room
-            logger.info(f"Connected to room: {ctx.room.name}")
+            logger.info(f"🚀 Agent dispatched to room: {ctx.room.name or 'Unknown'}")
+            logger.info(f"🔗 Connecting to LiveKit room...")
             
+            # Connect to the room with auto-subscribe enabled
+            await ctx.connect(auto_subscribe=agents.AutoSubscribe.AUDIO_ONLY)
+            self.room = ctx.room
+            
+            logger.info(f"✅ Successfully connected to room: {ctx.room.name}")
+            logger.info(f"📊 Room participants: {len(ctx.room.remote_participants)}")
+            
+            # Register event handlers with better error handling
             ctx.room.on("data_received", lambda *args, **kwargs: self.sync_handle_data_received(*args, **kwargs))
             ctx.room.on("participant_connected", self.on_participant_connected)
             ctx.room.on("participant_disconnected", self.on_participant_disconnected)
             
-            logger.info("Event handlers registered")
-            logger.info("ChatAgent ready to receive messages!")
+            logger.info("🎯 Event handlers registered successfully")
+            logger.info("🤖 ChatAgent is ready and listening for messages!")
+            
+            # Send a welcome message to the room if there are participants
+            if len(ctx.room.remote_participants) > 0:
+                await self.send_welcome_message()
+                
         except Exception as e:
-            logger.error(f"Error in agent entrypoint: {e}")
+            logger.error(f"❌ Error in agent entrypoint: {e}")
+            logger.error(f"Room info: {ctx.room.name if ctx.room else 'No room'}")
             raise
     
     def on_participant_connected(self, participant: rtc.RemoteParticipant):
-        logger.info(f"Participant joined: {participant.identity}")
+        logger.info(f"👤 Participant joined: {participant.identity}")
+        # Send welcome message to new participant
+        asyncio.create_task(self.send_welcome_message_to_participant(participant.identity))
     
     def on_participant_disconnected(self, participant: rtc.RemoteParticipant):
-        logger.info(f"Participant left: {participant.identity}")
+        logger.info(f"👋 Participant left: {participant.identity}")
+    
+    async def send_welcome_message(self):
+        """Send a welcome message when agent first joins the room."""
+        welcome_msg = "🤖 AI Assistant has joined the chat! Feel free to ask me anything."
+        await self.send_response(welcome_msg, "system")
+    
+    async def send_welcome_message_to_participant(self, participant_identity: str):
+        """Send a personalized welcome message to a specific participant."""
+        welcome_msg = f"👋 Welcome {participant_identity}! I'm your AI Assistant. How can I help you today?"
+        await self.send_response(welcome_msg, participant_identity)
 
 async def entrypoint(ctx: JobContext):
     logger.info("Starting ChatAgent...")
@@ -119,4 +158,12 @@ def prewarm(proc):
     logger.info("Prewarming ChatAgent...")
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))
+    # Enable automatic dispatch by NOT setting agent_name
+    # This allows the agent to automatically join new rooms
+    worker_options = WorkerOptions(
+        entrypoint_fnc=entrypoint, 
+        prewarm_fnc=prewarm
+        # NOTE: No agent_name set - this enables automatic dispatch to all rooms
+    )
+    logger.info("Starting LiveKit agent with automatic dispatch enabled...")
+    cli.run_app(worker_options)
