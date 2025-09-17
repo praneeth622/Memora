@@ -19,58 +19,156 @@ class MemoryService:
         """Initialize the memory service with mem0 client."""
         self.logger = logging.getLogger(__name__)
         
-        # Get mem0 API key from environment
-        api_key = os.getenv('MEM0_API_KEY')
+        # Get API keys from environment
+        mem0_api_key = os.getenv('MEM0_API_KEY')
+        gemini_api_key = os.getenv('GEMINI_API_KEY')
         
-        if not api_key:
+        if not mem0_api_key:
             self.logger.warning("MEM0_API_KEY not found in environment variables")
             self.memory = None
-            self.logger.info("MemoryService initialized in fallback mode (no API key)")
+            self.logger.info("MemoryService initialized in fallback mode (no MEM0 API key)")
+        elif not gemini_api_key:
+            self.logger.warning("GEMINI_API_KEY not found - required for embeddings")
+            self.memory = None
+            self.logger.info("MemoryService initialized in fallback mode (no Gemini API key)")
         else:
             try:
-                # Try simple Memory initialization first
-                self.memory = Memory()
-                self.logger.info("MemoryService initialized successfully with mem0.ai")
+                # Set environment variables for mem0
+                os.environ['MEM0_API_KEY'] = mem0_api_key
+                
+                # Use working configuration: HuggingFace embeddings + Gemini LLM + correct vector dimensions
+                from mem0.configs.base import MemoryConfig, EmbedderConfig, LlmConfig, VectorStoreConfig
+                
+                try:
+                    # Configure HuggingFace embeddings (384 dimensions)
+                    embedder_config = EmbedderConfig(
+                        provider='huggingface',
+                        config={
+                            'model': 'sentence-transformers/all-MiniLM-L6-v2'
+                        }
+                    )
+                    
+                    # Configure Gemini LLM
+                    llm_config = LlmConfig(
+                        provider='gemini',
+                        config={
+                            'api_key': gemini_api_key,
+                        }
+                    )
+                    
+                    # Configure vector store with correct dimensions for HuggingFace model
+                    # Use process-specific path or shared persistent path
+                    db_path = os.path.expanduser("~/.memora/qdrant")
+                    os.makedirs(db_path, exist_ok=True)
+                    
+                    vector_config = VectorStoreConfig(
+                        provider='qdrant',
+                        config={
+                            'collection_name': 'memora_memories',
+                            'embedding_model_dims': 384,  # Correct for all-MiniLM-L6-v2
+                            'path': db_path,
+                            'on_disk': True  # Persistent storage
+                        }
+                    )
+                    
+                    # Create complete memory config
+                    memory_config = MemoryConfig(
+                        embedder=embedder_config,
+                        llm=llm_config,
+                        vector_store=vector_config
+                    )
+                    
+                    self.memory = Memory(config=memory_config)
+                    self.config_used = "HuggingFace embeddings + Gemini LLM + Qdrant (384-dim)"
+                    self.logger.info(f"MemoryService initialized successfully with {self.config_used}")
+                    
+                except Exception as e:
+                    self.logger.error(f"Memory initialization failed: {e}")
+                    # Try fallback with just HuggingFace embeddings and default LLM
+                    try:
+                        self.logger.info("Trying fallback configuration with HuggingFace embeddings only")
+                        embedder_config = EmbedderConfig(
+                            provider='huggingface',
+                            config={'model': 'sentence-transformers/all-MiniLM-L6-v2'}
+                        )
+                        # Use same shared path for fallback
+                        fallback_db_path = os.path.expanduser("~/.memora/qdrant_fallback")
+                        os.makedirs(fallback_db_path, exist_ok=True)
+                        
+                        vector_config = VectorStoreConfig(
+                            provider='qdrant',
+                            config={
+                                'collection_name': 'memora_fallback',
+                                'embedding_model_dims': 384,
+                                'path': fallback_db_path,
+                                'on_disk': True  # Persistent storage
+                            }
+                        )
+                        fallback_config = MemoryConfig(
+                            embedder=embedder_config,
+                            vector_store=vector_config
+                        )
+                        self.memory = Memory(config=fallback_config)
+                        self.config_used = "Fallback: HuggingFace embeddings only"
+                        self.logger.info("MemoryService initialized with fallback configuration")
+                    except Exception as e2:
+                        self.logger.error(f"Fallback initialization also failed: {e2}")
+                        self.memory = None
+                        self.logger.info("MemoryService initialized in no-memory mode")
+
             except Exception as e:
-                self.logger.error(f"Failed to initialize mem0 client: {e}")
-                self.logger.error(f"Error details: {type(e).__name__}: {str(e)}")
+                self.logger.error(f"Critical error initializing mem0: {e}")
                 self.memory = None
-                self.logger.info("MemoryService initialized in fallback mode due to initialization error")
+                self.logger.info("MemoryService initialized in fallback mode due to critical error")
     
     async def get_user_context(self, username: str) -> List[Dict[str, Any]]:
         """
         Retrieve conversation context for a specific user.
         
         Args:
-            username: The username to retrieve context for
+            username: The username to get context for
             
         Returns:
-            List of conversation context items
+            List of context dictionaries with role/content pairs
         """
         try:
             if not self.memory:
                 self.logger.warning("mem0 client not available, returning empty context")
                 return []
             
-            # Search for memories related to this user
-            memories = self.memory.search(
-                query=f"conversations with {username}",
-                user_id=username
-            )
+            # Get memories for this user
+            self.logger.info(f"🔍 Retrieving memories for user: {username}")
+            memories_response = self.memory.get_all(user_id=username)
             
-            self.logger.info(f"Retrieved {len(memories)} memories for {username}")
+            if not memories_response or 'results' not in memories_response:
+                self.logger.info(f"📝 No memories found for user: {username}")
+                return []
             
-            # Format memories for AI context
-            context_items = []
+            memories = memories_response['results']
+            self.logger.info(f"📚 Found {len(memories)} memories for user {username}")
+            
+            # Convert memories to context format
+            context = []
             for memory in memories:
-                context_items.append({
-                    'user_message': memory.get('user_message', ''),
-                    'bot_response': memory.get('bot_response', ''),
-                    'timestamp': memory.get('timestamp', ''),
-                    'summary': memory.get('summary', '')
-                })
+                if isinstance(memory, dict):
+                    # Get memory content and metadata
+                    memory_text = memory.get('memory', '')
+                    metadata = memory.get('metadata', {})
+                    
+                    # Add user message if available in metadata
+                    if 'user_message' in metadata:
+                        context.append({"role": "user", "content": metadata['user_message']})
+                    
+                    # Add bot response if available in metadata
+                    if 'bot_response' in metadata:
+                        context.append({"role": "assistant", "content": metadata['bot_response']})
+                    elif memory_text:
+                        # Fall back to the memory text itself
+                        context.append({"role": "assistant", "content": memory_text})
             
-            return context_items
+            # Limit context to last N conversations to manage token usage
+            max_context_items = 20  # 10 user + 10 assistant messages
+            return context[-max_context_items:]
             
         except Exception as e:
             self.logger.error(f"Error retrieving context for {username}: {e}")
@@ -102,6 +200,7 @@ class MemoryService:
             }
             
             # Store in mem0
+            self.logger.info(f"💾 Storing interaction for user: {username}")
             result = self.memory.add(
                 messages=[
                     {"role": "user", "content": user_message},
@@ -111,7 +210,7 @@ class MemoryService:
                 metadata=interaction_data
             )
             
-            self.logger.info(f"Stored interaction for {username}: {len(user_message)} chars message")
+            self.logger.info(f"✅ Stored interaction for {username}: {len(user_message)} chars message")
             return True
             
         except Exception as e:
@@ -133,7 +232,12 @@ class MemoryService:
                 return None
             
             # Get all memories for this user
-            memories = self.memory.get_all(user_id=username)
+            memories_response = self.memory.get_all(user_id=username)
+            
+            if not memories_response or 'results' not in memories_response:
+                return None
+            
+            memories = memories_response['results']
             
             if not memories:
                 return None
@@ -142,10 +246,26 @@ class MemoryService:
             interaction_count = len(memories)
             recent_topics = []
             
-            for memory in memories[-3:]:  # Last 3 interactions
-                content = memory.get('content', '')
-                if content:
-                    recent_topics.append(content[:50] + "..." if len(content) > 50 else content)
+            # Get last 3 memories
+            recent_memories = memories[-3:] if len(memories) >= 3 else memories
+            
+            for memory in recent_memories:
+                if isinstance(memory, dict):
+                    # Try to get meaningful content
+                    memory_text = memory.get('memory', '')
+                    metadata = memory.get('metadata', {})
+                    
+                    # Prefer user message for topics
+                    if 'user_message' in metadata:
+                        content = metadata['user_message']
+                    elif memory_text:
+                        content = memory_text
+                    else:
+                        continue
+                    
+                    if content:
+                        topic = content[:50] + "..." if len(content) > 50 else content
+                        recent_topics.append(topic)
             
             summary = f"User {username}: {interaction_count} previous interactions"
             if recent_topics:
@@ -171,12 +291,21 @@ class MemoryService:
             if not self.memory:
                 return False
             
-            # Delete all memories for this user
-            memories = self.memory.get_all(user_id=username)
-            for memory in memories:
-                self.memory.delete(memory_id=memory.get('id'))
+            # Get all memories for this user
+            memories_response = self.memory.get_all(user_id=username)
             
-            self.logger.info(f"Cleared all memories for {username}")
+            if not memories_response or 'results' not in memories_response:
+                self.logger.info(f"No memories found for {username}")
+                return True
+            
+            memories = memories_response['results']
+            
+            # Delete all memories for this user
+            for memory in memories:
+                if isinstance(memory, dict) and 'id' in memory:
+                    self.memory.delete(memory_id=memory['id'])
+            
+            self.logger.info(f"Cleared {len(memories)} memories for {username}")
             return True
             
         except Exception as e:

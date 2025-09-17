@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from dotenv import load_dotenv
 from livekit import agents, rtc
 from livekit.agents import JobContext, WorkerOptions, cli
@@ -49,20 +50,34 @@ class ChatAgent:
                 if hasattr(data_packet, 'payload'):
                     logger.info(f"📦 Payload: {data_packet.payload}")
                     
-            # Try to process the data with fallback participant
+            # Try to process the data with correct participant identification
             if hasattr(data_packet, 'data'):
                 payload = data_packet.data
                 participant = None
                 
-                # Get any available participant
-                if self.room and len(self.room.remote_participants) > 0:
-                    participant = list(self.room.remote_participants.values())[0]
-                    logger.info(f"✅ Using participant: {participant.identity}")
-                    
+                # FIXED: Get the actual participant who sent this message
+                if hasattr(data_packet, 'participant'):
+                    participant = data_packet.participant
+                    logger.info(f"✅ Using actual message sender: {participant.identity}")
+                elif hasattr(data_packet, 'participant_identity'):
+                    # Find participant by identity
+                    participant_identity = data_packet.participant_identity
+                    if self.room and participant_identity in self.room.remote_participants:
+                        participant = self.room.remote_participants[participant_identity]
+                        logger.info(f"✅ Found participant by identity: {participant.identity}")
+                    else:
+                        logger.error(f"❌ Participant {participant_identity} not found in room")
+                else:
+                    # Fallback: use first participant (but log warning)
+                    if self.room and len(self.room.remote_participants) > 0:
+                        participant = list(self.room.remote_participants.values())[0]
+                        logger.warning(f"⚠️ FALLBACK: Using first participant (this may cause user confusion): {participant.identity}")
+                    else:
+                        logger.error(f"❌ No participants available in room")
+                
+                if participant:
                     # Process the message
                     asyncio.create_task(self.handle_data_received_async(payload, participant))
-                else:
-                    logger.error(f"❌ No participants available in room")
             else:
                 logger.error(f"❌ No data attribute found in packet")
                 
@@ -84,10 +99,22 @@ class ChatAgent:
                 payload = None
                 participant = None
                 
+                # FIXED: Better participant extraction logic
                 if len(args) >= 2:
                     participant_arg = args[1]
                     if hasattr(participant_arg, 'identity'):
                         participant = participant_arg
+                        logger.info(f"✅ Found participant from args[1]: {participant.identity}")
+                
+                # If participant not found in args, try to extract from data_arg
+                if not participant and hasattr(data_arg, 'participant'):
+                    participant = data_arg.participant
+                    logger.info(f"✅ Found participant from DataPacket: {participant.identity}")
+                elif not participant and hasattr(data_arg, 'participant_identity'):
+                    participant_identity = data_arg.participant_identity
+                    if self.room and participant_identity in self.room.remote_participants:
+                        participant = self.room.remote_participants[participant_identity]
+                        logger.info(f"✅ Found participant by identity lookup: {participant.identity}")
                         
                 # Try to determine payload format
                 if isinstance(data_arg, bytes):
@@ -98,7 +125,7 @@ class ChatAgent:
                     payload = str(data_arg).encode('utf-8')
                 
                 if payload and participant:
-                    logger.info(f"� Processing data from {participant.identity}: {len(payload)} bytes")
+                    logger.info(f"🔄 Processing data from {participant.identity}: {len(payload)} bytes")
                     
                     # Create async task
                     try:
@@ -110,6 +137,7 @@ class ChatAgent:
                     loop.create_task(self.handle_data_received_async(payload, participant))
                 else:
                     logger.error(f"❌ Could not extract payload or participant from args")
+                    logger.error(f"📦 Payload: {payload is not None}, Participant: {participant is not None}")
                     
             else:
                 logger.error(f"❌ No arguments received in data handler")
@@ -173,7 +201,7 @@ class ChatAgent:
                 "type": "chat-message",
                 "content": response,
                 "sender": "AI Assistant", 
-                "timestamp": int(asyncio.get_event_loop().time() * 1000)  # Convert to milliseconds
+                "timestamp": int(time.time() * 1000)  # Unix timestamp in milliseconds
             }
             
             response_json = json.dumps(response_data)
