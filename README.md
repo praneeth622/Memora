@@ -60,7 +60,6 @@ See how Memora's real-time AI chat works with contextual memory, multi-user supp
 - **Framework**: LiveKit Agents SDK
 - **AI Service**: Google Gemini AI API
 - **Memory Store**: mem0.ai with Qdrant vector database
-- **Embeddings**: HuggingFace sentence-transformers
 - **Token Server**: Flask for JWT token generation
 - **Architecture**: Microservices with dependency injection
 
@@ -167,7 +166,7 @@ docker-compose restart [service-name]
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/your-username/memora.git
+git clone https://https://github.com/praneeth622/Memora/
 cd memora
 ```
 
@@ -178,7 +177,7 @@ npm install
 
 # Start development server
 npm run dev
-# Frontend runs on http://localhost:3001
+# Frontend runs on http://localhost:3000
 ```
 
 ### 3. Backend Setup
@@ -246,41 +245,6 @@ docker-compose -f docker-compose.prod.yml up -d
 - `yourusername/memora-backend-agent:v1.0.0` (616MB) - LiveKit agent with AI
 - `yourusername/memora-token-server:v1.0.0` (616MB) - JWT token server
 
-### 🚀 AWS EC2 Deployment
-
-Deploy Memora on AWS t3.micro with custom domain:
-
-#### Quick Deploy Commands
-```bash
-# On AWS EC2 instance (Ubuntu 22.04):
-# 1. Install Docker & Docker Compose
-curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh
-sudo usermod -aG docker ubuntu && newgrp docker
-
-# 2. Download production config
-wget your-repo-url/docker-compose.prod.yml
-# Create .env with your API keys
-
-# 3. Deploy
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-#### Complete AWS Guide
-📖 **[Full AWS Deployment Guide →](./AWS_DEPLOYMENT.md)**
-
-**What you'll learn:**
-- EC2 instance setup and security groups
-- Docker installation and configuration  
-- Domain setup with SSL certificates
-- Nginx reverse proxy configuration
-- Production optimizations and monitoring
-- Cost estimates (~$11/month after free tier)
-
-**AWS Requirements:**
-- EC2 t3.micro instance (1GB RAM, 2 vCPUs)
-- Security groups (ports 80, 443, 22)
-- Domain name for SSL setup
-- Basic Linux knowledge
 
 ## �🔑 Environment Variables
 
@@ -338,7 +302,7 @@ LOG_LEVEL=INFO
    ```
 
 3. **Access Application**:
-   - Open http://localhost:3001
+   - Open http://localhost:3000
    - Enter a room name (e.g., "general", "team-alpha")
    - Start chatting with the AI agent
 
@@ -486,7 +450,7 @@ curl http://localhost:6333/health
 ```
 
 **4. WebRTC Connection Problems**
-- Check firewall settings for ports 3001, 3003
+- Check firewall settings for ports 3000, 3003
 - Verify LiveKit Cloud region settings
 - Test with different browsers (Chrome recommended)
 
