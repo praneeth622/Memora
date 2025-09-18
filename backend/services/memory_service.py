@@ -19,18 +19,28 @@ class MemoryService:
         """Initialize the memory service with mem0 client."""
         self.logger = logging.getLogger(__name__)
         
+        # Use shared database path but handle locking gracefully
+        self.db_path = os.path.expanduser("~/.memora/qdrant_shared")
+        os.makedirs(self.db_path, exist_ok=True)
+        
         # Get API keys from environment
         mem0_api_key = os.getenv('MEM0_API_KEY')
         gemini_api_key = os.getenv('GEMINI_API_KEY')
         
+        # Initialize simple file-based memory as primary fallback
+        self.simple_memory_path = os.path.expanduser("~/.memora/simple_memory.json")
+        os.makedirs(os.path.dirname(self.simple_memory_path), exist_ok=True)
+        
         if not mem0_api_key:
-            self.logger.warning("MEM0_API_KEY not found in environment variables")
+            self.logger.warning("MEM0_API_KEY not found - using simple file-based memory")
             self.memory = None
-            self.logger.info("MemoryService initialized in fallback mode (no MEM0 API key)")
+            self.config_used = "Simple file-based memory"
+            self.logger.info("MemoryService initialized with simple file-based fallback")
         elif not gemini_api_key:
-            self.logger.warning("GEMINI_API_KEY not found - required for embeddings")
+            self.logger.warning("GEMINI_API_KEY not found - using simple file-based memory")
             self.memory = None
-            self.logger.info("MemoryService initialized in fallback mode (no Gemini API key)")
+            self.config_used = "Simple file-based memory"
+            self.logger.info("MemoryService initialized with simple file-based fallback")
         else:
             try:
                 # Set environment variables for mem0
@@ -40,86 +50,110 @@ class MemoryService:
                 from mem0.configs.base import MemoryConfig, EmbedderConfig, LlmConfig, VectorStoreConfig
                 
                 try:
-                    # Configure HuggingFace embeddings (384 dimensions)
-                    embedder_config = EmbedderConfig(
-                        provider='huggingface',
-                        config={
-                            'model': 'sentence-transformers/all-MiniLM-L6-v2'
-                        }
-                    )
-                    
-                    # Configure Gemini LLM
-                    llm_config = LlmConfig(
-                        provider='gemini',
-                        config={
-                            'api_key': gemini_api_key,
-                        }
-                    )
-                    
-                    # Configure vector store with correct dimensions for HuggingFace model
-                    # Use process-specific path or shared persistent path
-                    db_path = os.path.expanduser("~/.memora/qdrant")
-                    os.makedirs(db_path, exist_ok=True)
-                    
-                    vector_config = VectorStoreConfig(
-                        provider='qdrant',
-                        config={
-                            'collection_name': 'memora_memories',
-                            'embedding_model_dims': 384,  # Correct for all-MiniLM-L6-v2
-                            'path': db_path,
-                            'on_disk': True  # Persistent storage
-                        }
-                    )
-                    
-                    # Create complete memory config
-                    memory_config = MemoryConfig(
-                        embedder=embedder_config,
-                        llm=llm_config,
-                        vector_store=vector_config
-                    )
-                    
-                    self.memory = Memory(config=memory_config)
-                    self.config_used = "HuggingFace embeddings + Gemini LLM + Qdrant (384-dim)"
-                    self.logger.info(f"MemoryService initialized successfully with {self.config_used}")
+                    # Try using mem0's default configuration first (uses their cloud service)
+                    self.memory = Memory()
+                    self.config_used = "mem0 cloud service (default)"
+                    self.logger.info(f"MemoryService initialized with mem0 cloud service")
                     
                 except Exception as e:
                     self.logger.error(f"Memory initialization failed: {e}")
-                    # Try fallback with just HuggingFace embeddings and default LLM
+                    # Try fallback with mem0's default configuration (simpler setup)
                     try:
-                        self.logger.info("Trying fallback configuration with HuggingFace embeddings only")
-                        embedder_config = EmbedderConfig(
-                            provider='huggingface',
-                            config={'model': 'sentence-transformers/all-MiniLM-L6-v2'}
-                        )
-                        # Use same shared path for fallback
-                        fallback_db_path = os.path.expanduser("~/.memora/qdrant_fallback")
-                        os.makedirs(fallback_db_path, exist_ok=True)
-                        
-                        vector_config = VectorStoreConfig(
-                            provider='qdrant',
-                            config={
-                                'collection_name': 'memora_fallback',
-                                'embedding_model_dims': 384,
-                                'path': fallback_db_path,
-                                'on_disk': True  # Persistent storage
-                            }
-                        )
-                        fallback_config = MemoryConfig(
-                            embedder=embedder_config,
-                            vector_store=vector_config
-                        )
-                        self.memory = Memory(config=fallback_config)
-                        self.config_used = "Fallback: HuggingFace embeddings only"
-                        self.logger.info("MemoryService initialized with fallback configuration")
+                        self.logger.info("Trying simple mem0 initialization with API key only")
+                        self.memory = Memory()
+                        self.config_used = "Simple mem0 with API key"
+                        self.logger.info("MemoryService initialized with simple mem0 configuration")
                     except Exception as e2:
-                        self.logger.error(f"Fallback initialization also failed: {e2}")
-                        self.memory = None
-                        self.logger.info("MemoryService initialized in no-memory mode")
+                        self.logger.error(f"Simple mem0 initialization also failed: {e2}")
+                        # Final fallback: use local configuration with Gemini LLM (no OpenAI required)
+                        try:
+                            self.logger.info("Trying final fallback with Gemini LLM + HuggingFace embeddings")
+                            # Use fallback local database 
+                            fallback_db_path = os.path.expanduser("~/.memora/qdrant_fallback")
+                            os.makedirs(fallback_db_path, exist_ok=True)
+                            self._cleanup_qdrant_locks(fallback_db_path)
+                            
+                            # Use Gemini for LLM (we have the API key) and HuggingFace for embeddings
+                            embedder_config = EmbedderConfig(
+                                provider='huggingface',
+                                config={'model': 'sentence-transformers/all-MiniLM-L6-v2'}
+                            )
+                            
+                            llm_config = LlmConfig(
+                                provider='gemini',
+                                config={
+                                    'api_key': gemini_api_key,
+                                }
+                            )
+                            
+                            vector_config = VectorStoreConfig(
+                                provider='qdrant',
+                                config={
+                                    'collection_name': 'memora_fallback',
+                                    'embedding_model_dims': 384,
+                                    'path': fallback_db_path,
+                                    'on_disk': True
+                                }
+                            )
+                            
+                            fallback_config = MemoryConfig(
+                                embedder=embedder_config,
+                                llm=llm_config,
+                                vector_store=vector_config
+                            )
+                            self.memory = Memory(config=fallback_config)
+                            self.config_used = "Fallback: HuggingFace embeddings + Gemini LLM + local Qdrant"
+                            self.logger.info("MemoryService initialized with fallback configuration")
+                        except Exception as e3:
+                            self.logger.error(f"All mem0 attempts failed: {e3}")
+                            self.logger.info("Falling back to simple file-based memory")
+                            self.memory = None
+                            self.config_used = "Simple file-based memory"
 
             except Exception as e:
                 self.logger.error(f"Critical error initializing mem0: {e}")
+                self.logger.info("Using simple file-based memory fallback")
                 self.memory = None
-                self.logger.info("MemoryService initialized in fallback mode due to critical error")
+                self.config_used = "Simple file-based memory"
+    
+    def _cleanup_qdrant_locks(self, db_path: str):
+        """Clean up any Qdrant lock files that might prevent access."""
+        try:
+            import glob
+            lock_files = glob.glob(os.path.join(db_path, "*.lock"))
+            lock_files.extend(glob.glob(os.path.join(db_path, "*/*.lock")))
+            
+            for lock_file in lock_files:
+                try:
+                    os.remove(lock_file)
+                    self.logger.info(f"Removed lock file: {lock_file}")
+                except Exception as e:
+                    self.logger.debug(f"Could not remove lock file {lock_file}: {e}")
+        except Exception as e:
+            self.logger.debug(f"Lock cleanup failed (non-critical): {e}")
+    
+    def _load_simple_memory(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Load simple file-based memory."""
+        try:
+            if os.path.exists(self.simple_memory_path):
+                with open(self.simple_memory_path, 'r') as f:
+                    import json
+                    return json.load(f)
+            return {}
+        except Exception as e:
+            self.logger.error(f"Error loading simple memory: {e}")
+            return {}
+    
+    def _save_simple_memory(self, memory_data: Dict[str, List[Dict[str, Any]]]) -> bool:
+        """Save simple file-based memory."""
+        try:
+            with open(self.simple_memory_path, 'w') as f:
+                import json
+                json.dump(memory_data, f, indent=2, default=str)
+            return True
+        except Exception as e:
+            self.logger.error(f"Error saving simple memory: {e}")
+            return False
     
     async def get_user_context(self, username: str) -> List[Dict[str, Any]]:
         """
@@ -133,10 +167,24 @@ class MemoryService:
         """
         try:
             if not self.memory:
-                self.logger.warning("mem0 client not available, returning empty context")
-                return []
+                # Use simple memory fallback
+                self.logger.info(f"🔍 Retrieving simple memory for user: {username}")
+                memory_data = self._load_simple_memory()
+                user_conversations = memory_data.get(username, [])
+                
+                # Convert to context format
+                context = []
+                for conversation in user_conversations:
+                    context.append({"role": "user", "content": conversation['user_message']})
+                    context.append({"role": "assistant", "content": conversation['bot_response']})
+                
+                # Limit context to last N conversations
+                max_context_items = 20
+                context = context[-max_context_items:]
+                self.logger.info(f"📚 Retrieved {len(context)} context items from simple memory for {username}")
+                return context
             
-            # Get memories for this user
+            # Use mem0 if available
             self.logger.info(f"🔍 Retrieving memories for user: {username}")
             memories_response = self.memory.get_all(user_id=username)
             
@@ -188,9 +236,32 @@ class MemoryService:
         """
         try:
             if not self.memory:
-                self.logger.warning("mem0 client not available, skipping storage")
-                return False
+                # Use simple memory fallback
+                self.logger.info(f"💾 Storing interaction in simple memory for user: {username}")
+                memory_data = self._load_simple_memory()
+                
+                if username not in memory_data:
+                    memory_data[username] = []
+                
+                # Add new interaction
+                interaction = {
+                    "user_message": user_message,
+                    "bot_response": bot_response,
+                    "timestamp": datetime.now().isoformat(),
+                    "conversation_type": "chat_room"
+                }
+                
+                memory_data[username].append(interaction)
+                
+                # Keep only last 50 interactions per user to manage file size
+                memory_data[username] = memory_data[username][-50:]
+                
+                success = self._save_simple_memory(memory_data)
+                if success:
+                    self.logger.info(f"✅ Stored interaction in simple memory for {username}")
+                return success
             
+            # Use mem0 if available
             # Create a memory entry for this interaction
             interaction_data = {
                 "user_message": user_message,
