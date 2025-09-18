@@ -1,0 +1,82 @@
+# Production Docker Compose for AWS deployment
+# Uses pre-built images from Docker Hub
+
+services:
+  # Frontend - Next.js Application
+  frontend:
+    image: praneeth622/memora-frontend:v1.0.0
+    container_name: memora-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - memora-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - backend-token-server
+
+  # Backend Token Server - LiveKit JWT Generation
+  backend-token-server:
+    image: praneeth622/memora-token-server:v1.0.0
+    container_name: memora-token-server
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - ENVIRONMENT=production
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+    command: ["python", "token_server.py"]
+    networks:
+      - memora-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:3003/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Backend Agent - LiveKit AI Agent
+  backend-agent:
+    image: praneeth622/memora-backend-agent:v1.0.0
+    container_name: memora-agent
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MEM0_API_KEY=${MEM0_API_KEY}
+    command: ["python", "agent.py", "start"]
+    networks:
+      - memora-network
+    restart: unless-stopped
+    volumes:
+      - backend-logs:/app/logs
+      - agent-data:/app/data
+    depends_on:
+      - backend-token-server
+
+# Networks
+networks:
+  memora-network:
+    driver: bridge
+    name: memora-network
+
+# Volumes for persistent data
+volumes:
+  backend-logs:
+    name: memora-backend-logs
+  agent-data:
+    name: memora-agent-data

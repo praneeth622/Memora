@@ -23,38 +23,9 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
   const { room } = params
   const { username } = searchParams
 
-  // Validate required parameters
-  if (!room) {
-    notFound()
-  }
-
-  if (!username) {
-    // Redirect to home page if username is missing
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-xl text-destructive">Missing Username</CardTitle>
-          </CardHeader>
-          <CardContent className="text-center">
-            <p className="text-muted-foreground mb-4">
-              Username is required to join the chat room.
-            </p>
-            <a 
-              href="/" 
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
-            >
-              Go Back to Home
-            </a>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Decode URL parameters
-  const decodedRoom = decodeURIComponent(room)
-  const decodedUsername = decodeURIComponent(username)
+  // Decode URL parameters (with safe fallbacks for hooks compliance)
+  const decodedRoom = room ? decodeURIComponent(room) : ''
+  const decodedUsername = username ? decodeURIComponent(username) : ''
 
   // Memoize LiveKit configuration to prevent unnecessary re-renders
   const liveKitConfig: LiveKitConfig = useMemo(() => ({
@@ -114,6 +85,35 @@ export default function ChatRoomPage({ params, searchParams }: ChatPageProps) {
       }, 2000)
     })
   }, [state, room, decodedUsername, connect])
+
+  // Validation after all hooks (Rules of Hooks compliance)
+  if (!room) {
+    notFound()
+  }
+
+  if (!username) {
+    // Redirect to home page if username is missing
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl text-destructive">Missing Username</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-muted-foreground mb-4">
+              Username is required to join the chat room.
+            </p>
+            <a 
+              href="/" 
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+            >
+              Go Back to Home
+            </a>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   // Connection status
   const isConnected = state === ConnectionState.CONNECTED

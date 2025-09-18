@@ -101,7 +101,58 @@ The system leverages LiveKit's WebRTC infrastructure for ultra-low latency messa
 
 ## 🚀 Setup Instructions
 
-### Prerequisites
+### 🐳 Docker Setup (Recommended)
+
+The fastest way to get Memora running is using Docker:
+
+#### Prerequisites
+- **Docker Desktop** (includes Docker Compose)
+- **Git** for cloning the repository
+
+#### Quick Start
+```bash
+# Clone the repository
+git clone https://github.com/your-username/memora.git
+cd memora
+
+# Copy environment template
+cp .env.template .env
+
+# Edit .env file with your API keys
+# Required: LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL
+# Optional: GEMINI_API_KEY, MEM0_API_KEY
+
+# Start all services
+./docker-scripts/start.sh
+
+# Or manually:
+docker-compose up --build -d
+```
+
+#### Services & Ports
+- **Frontend**: http://localhost:3000 (Next.js application)
+- **Token Server**: http://localhost:3003 (LiveKit token generation)
+- **Backend Agent**: Port 8000 (internal, connects to LiveKit)
+
+#### Management Commands
+```bash
+# View service status
+docker-compose ps
+
+# View logs
+docker-compose logs -f [service-name]
+
+# Stop all services
+./docker-scripts/stop.sh
+# Or manually: docker-compose down
+
+# Restart a service
+docker-compose restart [service-name]
+```
+
+### 🔧 Manual Setup
+
+#### Prerequisites
 - **Node.js** 18+ and npm
 - **Python** 3.13+ with pip
 - **LiveKit Cloud** account and API keys
@@ -147,7 +198,85 @@ python token_server.py
 # Server runs on http://localhost:3003
 ```
 
-## 🔑 Environment Variables
+## � Docker Hub & Production Deployment
+
+### Docker Hub Setup
+
+Before deploying to production, push your images to Docker Hub:
+
+```bash
+# 1. Login to Docker Hub
+docker login
+
+# 2. Build local images first
+docker-compose build
+
+# 3. Tag and push images (replace 'yourusername' with your Docker Hub username)
+./docker-scripts/push-to-hub.sh
+
+# Or manually:
+DOCKER_USERNAME="yourusername"
+docker tag memorafrontend-frontend:latest ${DOCKER_USERNAME}/memora-frontend:v1.0.0
+docker tag memorafrontend-backend-agent:latest ${DOCKER_USERNAME}/memora-backend-agent:v1.0.0
+docker tag memorafrontend-backend-token-server:latest ${DOCKER_USERNAME}/memora-token-server:v1.0.0
+
+docker push ${DOCKER_USERNAME}/memora-frontend:v1.0.0
+docker push ${DOCKER_USERNAME}/memora-backend-agent:v1.0.0
+docker push ${DOCKER_USERNAME}/memora-token-server:v1.0.0
+```
+
+### Production Deployment
+
+Use `docker-compose.prod.yml` for production deployment:
+
+```bash
+# Update the image names in docker-compose.prod.yml with your Docker Hub username
+# Then deploy:
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+**Required Images on Docker Hub:**
+- `yourusername/memora-frontend:v1.0.0` (168MB) - Next.js frontend
+- `yourusername/memora-backend-agent:v1.0.0` (616MB) - LiveKit agent with AI
+- `yourusername/memora-token-server:v1.0.0` (616MB) - JWT token server
+
+### 🚀 AWS EC2 Deployment
+
+Deploy Memora on AWS t3.micro with custom domain:
+
+#### Quick Deploy Commands
+```bash
+# On AWS EC2 instance (Ubuntu 22.04):
+# 1. Install Docker & Docker Compose
+curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh
+sudo usermod -aG docker ubuntu && newgrp docker
+
+# 2. Download production config
+wget your-repo-url/docker-compose.prod.yml
+# Create .env with your API keys
+
+# 3. Deploy
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+#### Complete AWS Guide
+📖 **[Full AWS Deployment Guide →](./AWS_DEPLOYMENT.md)**
+
+**What you'll learn:**
+- EC2 instance setup and security groups
+- Docker installation and configuration  
+- Domain setup with SSL certificates
+- Nginx reverse proxy configuration
+- Production optimizations and monitoring
+- Cost estimates (~$11/month after free tier)
+
+**AWS Requirements:**
+- EC2 t3.micro instance (1GB RAM, 2 vCPUs)
+- Security groups (ports 80, 443, 22)
+- Domain name for SSL setup
+- Basic Linux knowledge
+
+## �🔑 Environment Variables
 
 Create a `.env` file in the `backend/` directory:
 

@@ -67,7 +67,7 @@ export default function RootLayout({
         >
           <div className="relative min-h-screen bg-background font-sans antialiased">
             <div className="relative flex min-h-screen flex-col">
-              <Header />
+              {/* <Header /> */}
               <main className="flex-1" role="main">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
                   {children}

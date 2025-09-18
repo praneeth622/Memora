@@ -1,232 +1,140 @@
 'use client'
 
-import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import React from 'react'
+import Link from 'next/link'
+import Navigation from '@/components/Navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { MessageCircle, Users, ArrowRight } from 'lucide-react'
-
-interface FormErrors {
-  username?: string
-  room?: string
-}
+import { Badge } from '@/components/ui/badge'
+import { 
+  MessageCircle, 
+  Users, 
+  ArrowRight, 
+  Brain, 
+  Zap, 
+  Shield, 
+  Sparkles,
+  Bot,
+  MessageSquare,
+  Clock,
+  Star,
+  LayoutDashboard
+} from 'lucide-react'
 
 export default function HomePage() {
-  const router = useRouter()
-  const [username, setUsername] = useState('')
-  const [room, setRoom] = useState('')
-  const [errors, setErrors] = useState<FormErrors>({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set())
-
-  const validateField = (fieldName: string, value: string): string | undefined => {
-    const trimmedValue = value.trim()
-    
-    if (fieldName === 'username') {
-      if (!trimmedValue) {
-        return 'Username is required'
-      }
-    }
-    
-    if (fieldName === 'room') {
-      if (!trimmedValue) {
-        return 'Room name is required'
-      }
-    }
-    
-    return undefined
-  }
-
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {}
-    
-    const usernameError = validateField('username', username)
-    const roomError = validateField('room', room)
-    
-    if (usernameError) newErrors.username = usernameError
-    if (roomError) newErrors.room = roomError
-    
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleFieldChange = (fieldName: string, value: string) => {
-    if (fieldName === 'username') {
-      setUsername(value)
-    } else if (fieldName === 'room') {
-      setRoom(value)
-    }
-    
-    // Clear error for this field when user starts typing
-    if (errors[fieldName as keyof FormErrors]) {
-      setErrors(prev => ({
-        ...prev,
-        [fieldName]: undefined
-      }))
-    }
-  }
-
-  const handleFieldBlur = (fieldName: string, value: string) => {
-    setTouchedFields(prev => new Set(prev).add(fieldName))
-    
-    // Validate field on blur if it has been touched
-    const error = validateField(fieldName, value)
-    if (error) {
-      setErrors(prev => ({
-        ...prev,
-        [fieldName]: error
-      }))
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Mark all fields as touched
-    setTouchedFields(new Set(['username', 'room']))
-    
-    if (!validateForm()) {
-      return
-    }
-    
-    setIsSubmitting(true)
-    
-    try {
-      // Encode URL parameters to handle special characters
-      const encodedRoom = encodeURIComponent(room.trim())
-      const encodedUsername = encodeURIComponent(username.trim())
-      
-      // Navigate to chat room
-      router.push(`/chat/${encodedRoom}?username=${encodedUsername}`)
-    } catch (error) {
-      console.error('Navigation error:', error)
-      setIsSubmitting(false)
-    }
-  }
-
-  const shouldShowError = (fieldName: string): boolean => {
-    return touchedFields.has(fieldName) && !!errors[fieldName as keyof FormErrors]
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4">
-      <Card className="w-full max-w-md shadow-lg border-border/50">
-        <CardHeader className="text-center space-y-2">
-          <div className="flex items-center justify-center mb-2">
-            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 text-primary">
-              <MessageCircle className="h-6 w-6" />
+    <>
+      <Navigation />
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/10">
+        {/* Hero Section */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-grid-white/[0.02] bg-grid-pattern" />
+        <div className="relative container mx-auto px-4 pt-20 pb-16">
+          <div className="text-center space-y-8 max-w-4xl mx-auto">
+            {/* Logo & Title */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20">
+                  <Bot className="h-10 w-10 text-primary" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
+                  Memora AI Chat
+                </h1>
+                <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                  Experience intelligent conversations with an AI that remembers. 
+                  Built for seamless real-time communication with persistent memory.
+                </p>
+              </div>
+            </div>
+
+            {/* Features Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 mb-12">
+              <Card className="border-border/50 hover:border-primary/20 transition-colors bg-card/50 backdrop-blur-sm">
+                <CardContent className="p-6 text-center space-y-3">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-500/10 text-blue-500 mx-auto">
+                    <Brain className="h-6 w-6" />
+                  </div>
+                  <h3 className="font-semibold">Smart Memory</h3>
+                  <p className="text-sm text-muted-foreground">
+                    AI remembers your conversations and preferences across sessions
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-border/50 hover:border-primary/20 transition-colors bg-card/50 backdrop-blur-sm">
+                <CardContent className="p-6 text-center space-y-3">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-500/10 text-green-500 mx-auto">
+                    <Zap className="h-6 w-6" />
+                  </div>
+                  <h3 className="font-semibold">Real-time</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Instant responses powered by WebRTC and LiveKit technology
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-border/50 hover:border-primary/20 transition-colors bg-card/50 backdrop-blur-sm">
+                <CardContent className="p-6 text-center space-y-3">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-purple-500/10 text-purple-500 mx-auto">
+                    <Shield className="h-6 w-6" />
+                  </div>
+                  <h3 className="font-semibold">Secure</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Isolated memory spaces and encrypted real-time communication
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tech Stack Badges */}
+            <div className="flex flex-wrap justify-center gap-2 mb-12">
+              <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20">
+                <Sparkles className="w-3 h-3 mr-1" />
+                Gemini AI
+              </Badge>
+              <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20">
+                LiveKit WebRTC
+              </Badge>
+              <Badge variant="secondary" className="bg-green-500/10 text-green-500 hover:bg-green-500/20">
+                Next.js 14
+              </Badge>
+              <Badge variant="secondary" className="bg-purple-500/10 text-purple-500 hover:bg-purple-500/20">
+                mem0.ai
+              </Badge>
+            </div>
+
+            {/* Call to Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button 
+                asChild
+                size="lg" 
+                className="text-lg px-8 py-6 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg hover:shadow-xl animate-none hover:animate-none"
+              >
+                <Link href="/dashboard">
+                  <LayoutDashboard className="w-5 h-5 mr-2" />
+                  Get Started
+                </Link>
+              </Button>
+              <Button 
+                asChild
+                variant="outline" 
+                size="lg" 
+                className="text-lg px-8 py-6 border-2 hover:bg-primary/5 hover:border-primary/30 transition-all duration-300"
+              >
+                <Link href="/features">
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Explore Features
+                </Link>
+              </Button>
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold tracking-tight">
-            Join Chat Room
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Enter your details to start chatting with others
-          </p>
-        </CardHeader>
-        
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-            {/* Username Field */}
-            <div className="space-y-2">
-              <Label 
-                htmlFor="username" 
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Username
-              </Label>
-              <div className="relative">
-                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="Enter your username"
-                  value={username}
-                  onChange={(e) => handleFieldChange('username', e.target.value)}
-                  onBlur={(e) => handleFieldBlur('username', e.target.value)}
-                  className={`pl-10 transition-colors ${
-                    shouldShowError('username') 
-                      ? 'border-destructive focus-visible:ring-destructive' 
-                      : ''
-                  }`}
-                  aria-invalid={shouldShowError('username')}
-                  aria-describedby={shouldShowError('username') ? 'username-error' : undefined}
-                  disabled={isSubmitting}
-                />
-              </div>
-              {shouldShowError('username') && (
-                <p 
-                  id="username-error" 
-                  className="text-sm text-destructive font-medium"
-                  role="alert"
-                >
-                  {errors.username}
-                </p>
-              )}
-            </div>
-
-            {/* Room Field */}
-            <div className="space-y-2">
-              <Label 
-                htmlFor="room" 
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Room Name
-              </Label>
-              <div className="relative">
-                <MessageCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="room"
-                  type="text"
-                  placeholder="Enter room name"
-                  value={room}
-                  onChange={(e) => handleFieldChange('room', e.target.value)}
-                  onBlur={(e) => handleFieldBlur('room', e.target.value)}
-                  className={`pl-10 transition-colors ${
-                    shouldShowError('room') 
-                      ? 'border-destructive focus-visible:ring-destructive' 
-                      : ''
-                  }`}
-                  aria-invalid={shouldShowError('room')}
-                  aria-describedby={shouldShowError('room') ? 'room-error' : undefined}
-                  disabled={isSubmitting}
-                />
-              </div>
-              {shouldShowError('room') && (
-                <p 
-                  id="room-error" 
-                  className="text-sm text-destructive font-medium"
-                  role="alert"
-                >
-                  {errors.room}
-                </p>
-              )}
-            </div>
-
-            {/* Submit Button */}
-            <Button 
-              type="submit" 
-              className="w-full transition-all duration-200 hover:shadow-md"
-              disabled={isSubmitting}
-              size="lg"
-            >
-              {isSubmitting ? (
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  <span>Joining...</span>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <span>Join Room</span>
-                  <ArrowRight className="h-4 w-4" />
-                </div>
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
+    </>
   )
 }

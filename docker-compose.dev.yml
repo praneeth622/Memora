@@ -1,0 +1,36 @@
+# Docker Compose override for development environment
+
+services:
+  # Frontend - Development mode with hot reload
+  frontend:
+    build:
+      target: deps  # Use deps stage for faster development builds
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    command: ["npm", "run", "dev"]
+    ports:
+      - "3000:3000"
+
+  # Backend Token Server - Development mode
+  backend-token-server:
+    environment:
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - backend-logs:/app/logs
+    command: ["python", "token_server.py"]
+
+  # Backend Agent - Development mode
+  backend-agent:
+    environment:
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - backend-logs:/app/logs
+      - agent-data:/app/data
+    command: ["python", "agent.py", "dev"]

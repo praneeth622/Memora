@@ -9,6 +9,12 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
+  // Enable standalone output for Docker
+  output: 'standalone',
+  // Disable telemetry for production
+  ...(process.env.NODE_ENV === 'production' && {
+    telemetry: false,
+  }),
 }
 
 module.exports = nextConfig
