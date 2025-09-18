@@ -1,250 +1,393 @@
-# Memora Frontend
+# Memora AI Chat Agent 🤖💬
 
-A modern, real-time chat application built with Next.js, React, and TypeScript. Memora provides seamless communication experiences with beautiful UI components and robust real-time messaging capabilities.
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)](https://python.org/)
+[![LiveKit](https://img.shields.io/badge/LiveKit-00D4AA?style=flat&logo=livekit&logoColor=white)](https://livekit.io/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
-## 🚀 Project Overview
+A sophisticated real-time AI chat agent built with modern web technologies, featuring contextual memory, multi-user support, and seamless WebRTC communication.
 
-Memora Frontend is a sophisticated chat application that enables users to create and join chat rooms for real-time communication. Built with modern web technologies, it offers a responsive, accessible, and performant user experience across all devices.
+## 🌟 Project Overview
 
-### Key Technologies
+Memora is an intelligent conversational AI platform that combines the power of real-time communication with advanced memory capabilities. Built on a microservices architecture, it provides users with contextual, personalized chat experiences while maintaining conversation history and user-specific memory isolation.
 
-- **Next.js 14** - React framework with App Router
-- **React 18** - UI library with modern hooks and patterns
-- **TypeScript** - Type-safe development experience
-- **Tailwind CSS** - Utility-first CSS framework
-- **shadcn/ui** - High-quality, accessible UI components
-- **LiveKit** - Real-time communication infrastructure (integration ready)
-- **Lucide React** - Beautiful, customizable icons
+The system leverages LiveKit's WebRTC infrastructure for ultra-low latency messaging, Gemini AI for intelligent responses, and mem0.ai for sophisticated memory management, creating a seamless and intelligent conversational experience.
 
-## ✨ Features
+## ✨ Key Features
 
-### User Experience
-- 🏠 **Room Creation & Joining** - Create or join chat rooms with custom names
-- 💬 **Real-time Messaging** - Instant message delivery and synchronization
-- 👥 **Participant Management** - View online/offline status and participant lists
-- 📱 **Responsive Design** - Optimized for desktop, tablet, and mobile devices
-- 🌙 **Dark/Light Mode** - System-aware theme switching
-- ♿ **Accessibility First** - WCAG compliant with keyboard navigation support
+### 🎯 Core Capabilities
+- **Real-time Messaging**: Instant bi-directional communication using WebRTC data channels
+- **AI-Powered Responses**: Context-aware conversations powered by Google's Gemini AI
+- **Persistent Memory**: Conversation context and user preferences stored using mem0.ai
+- **Multi-user Support**: Isolated memory and conversation spaces for multiple users
+- **Room-based Chat**: Dynamic room creation with unique identifiers
+- **Connection Resilience**: Automatic reconnection and error recovery mechanisms
 
-### Developer Experience
-- 🔒 **Type Safety** - Comprehensive TypeScript implementation
-- 🧩 **Component Architecture** - Modular, reusable component design
-- 🎨 **Design System** - Consistent styling with shadcn/ui components
-- 🔧 **Developer Tools** - ESLint, Prettier, and TypeScript configuration
-- 📦 **Modern Build System** - Optimized Next.js build pipeline
-- 🚀 **Performance Optimized** - Code splitting and lazy loading
+### 🧠 Intelligence Features
+- **Contextual Understanding**: AI maintains conversation context across sessions
+- **User Identity Recognition**: Personalized responses based on user history
+- **Memory Isolation**: Secure separation of user data and conversation history
+- **Fact Extraction**: Automatic extraction and storage of important conversation facts
+- **Semantic Search**: Vector-based memory retrieval for relevant context
 
-### Technical Features
-- 🔌 **LiveKit Integration Ready** - Prepared for real-time communication
-- 🛡️ **Error Boundaries** - Graceful error handling and recovery
-- 🔄 **State Management** - Efficient React state patterns
-- 📊 **Connection Status** - Real-time connection monitoring
-- 🎯 **Custom Hooks** - Reusable logic encapsulation
+### 🔧 Technical Features
+- **Modular Architecture**: Clean separation of concerns with service-oriented design
+- **TypeScript Frontend**: Type-safe development with modern React patterns
+- **Python Backend**: Scalable microservices with async/await patterns
+- **WebRTC Integration**: Direct peer-to-peer communication for minimal latency
+- **Responsive Design**: Mobile-first UI with dark/light theme support
+- **Real-time Status**: Live connection indicators and participant management
 
-## 🛠️ Setup Instructions
+## 🛠 Tech Stack
 
-### Prerequisites
+### Frontend
+- **Framework**: Next.js 14 with App Router
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS + shadcn/ui components
+- **Real-time**: LiveKit WebRTC SDK
+- **State Management**: React Hooks + Context API
+- **UI Components**: Radix UI primitives
 
-Before getting started, ensure you have the following installed:
+### Backend
+- **Runtime**: Python 3.13+
+- **Framework**: LiveKit Agents SDK
+- **AI Service**: Google Gemini AI API
+- **Memory Store**: mem0.ai with Qdrant vector database
+- **Embeddings**: HuggingFace sentence-transformers
+- **Token Server**: Flask for JWT token generation
+- **Architecture**: Microservices with dependency injection
 
-- **Node.js** (version 18.0 or higher)
-- **npm** (version 8.0 or higher) or **yarn** (version 1.22 or higher)
-- **Git** for version control
+### Infrastructure
+- **Communication**: LiveKit Cloud WebRTC
+- **Vector Database**: Qdrant (local/cloud)
+- **Environment**: Docker-ready with environment configuration
+- **Development**: Hot reloading with file watching
 
-### Installation
+## 🏗 Architecture
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd memora-frontend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.local.example .env.local
-   ```
-   Edit `.env.local` with your configuration (see Environment Variables section below).
-
-4. **Start the development server**
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   ```
-
-5. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000) to see the application.
-
-### Additional Setup (Optional)
-
-- **Type checking**: Run `npm run type-check` to verify TypeScript types
-- **Linting**: Run `npm run lint` to check code quality
-- **Build**: Run `npm run build` to create a production build
-
-## 🔧 Environment Variables
-
-Create a `.env.local` file in the root directory with the following variables:
-
-```env
-# Backend API Configuration
-NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
-
-# Application Configuration
-NEXT_PUBLIC_APP_NAME="Memora"
-NEXT_PUBLIC_APP_VERSION="0.1.0"
-
-# LiveKit Configuration (when backend is ready)
-# NEXT_PUBLIC_LIVEKIT_URL=wss://your-livekit-server.com
-# LIVEKIT_API_KEY=your-api-key
-# LIVEKIT_API_SECRET=your-api-secret
-
-# Feature Flags
-NEXT_PUBLIC_ENABLE_DEBUG_MODE=false
-
-# Optional: Analytics and Monitoring
-# NEXT_PUBLIC_ANALYTICS_ID=your-analytics-id
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   LiveKit Cloud  │    │   Backend       │
+│   (Next.js)     │◄──►│   WebRTC Relay   │◄──►│   (Python)      │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                       │                       │
+         │              ┌────────▼────────┐             │
+         │              │ Data Channels   │             │
+         │              │ (Messaging)     │             │
+         │              └─────────────────┘             │
+         │                                              │
+         ▼                                              ▼
+┌─────────────────┐                          ┌─────────────────┐
+│ Token Server    │                          │ AI Services     │
+│ (Flask:3003)    │                          │ ├── Gemini API  │
+└─────────────────┘                          │ ├── Memory      │
+                                             │ └── Message     │
+                                             └─────────────────┘
+                                                      │
+                                                      ▼
+                                             ┌─────────────────┐
+                                             │ Memory Store    │
+                                             │ (mem0.ai +      │
+                                             │  Qdrant)        │
+                                             └─────────────────┘
 ```
 
-### Environment Variable Descriptions
+### Data Flow
+1. **User Message** → Frontend → LiveKit Cloud → Python Agent
+2. **AI Processing** → Gemini AI + Memory Retrieval → Response Generation  
+3. **Response Delivery** → Python Agent → LiveKit Cloud → Frontend
+4. **Memory Storage** → Facts Extraction → Vector Embeddings → Qdrant
 
-- `NEXT_PUBLIC_BACKEND_URL`: The URL of your backend API server
-- `NEXT_PUBLIC_APP_NAME`: Application name displayed in the UI
-- `NEXT_PUBLIC_APP_VERSION`: Current version of the application
-- `NEXT_PUBLIC_ENABLE_DEBUG_MODE`: Enable additional debugging features
+## 🚀 Setup Instructions
 
-> **Note**: Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser. Keep sensitive data in server-side only variables.
+### Prerequisites
+- **Node.js** 18+ and npm
+- **Python** 3.13+ with pip
+- **LiveKit Cloud** account and API keys
+- **Google AI Studio** API key for Gemini
+- **mem0.ai** API key (optional, graceful fallback)
 
-## 📋 Important Notes
+### 1. Clone Repository
+```bash
+git clone https://github.com/your-username/memora.git
+cd memora
+```
 
-### LiveKit Integration
+### 2. Frontend Setup
+```bash
+# Install dependencies
+npm install
 
-- **Token Generation**: LiveKit tokens are generated by the backend server, not the frontend
-- **Real-time Features**: The application includes a comprehensive `useLiveKit` hook ready for LiveKit integration
-- **Placeholder Implementation**: Current messaging uses React state as a placeholder until LiveKit backend is ready
-- **Connection Management**: The hook handles connection states, error recovery, and participant management
+# Start development server
+npm run dev
+# Frontend runs on http://localhost:3001
+```
 
-### Backend Dependencies
+### 3. Backend Setup
+```bash
+cd backend
 
-- The frontend expects a backend API running on the configured `NEXT_PUBLIC_BACKEND_URL`
-- Authentication and room management are handled by the backend
-- LiveKit room tokens must be provided by the backend for security
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-### Browser Compatibility
+# Install dependencies
+pip install -r requirements.txt
 
-- Modern browsers with ES2020 support
-- WebRTC support required for real-time features
-- Responsive design supports mobile browsers
+# Start the agent
+python agent.py dev
+```
 
-## 👨‍💻 Development Practices
+### 4. Token Server
+```bash
+# In a separate terminal
+cd backend
+python token_server.py
+# Server runs on http://localhost:3003
+```
 
-### TypeScript Implementation
+## 🔑 Environment Variables
 
-- **Strict Mode**: Full TypeScript strict mode enabled for maximum type safety
-- **Interface-First Design**: All components use proper TypeScript interfaces
-- **Type Exports**: Shared types are exported from dedicated type files
-- **Generic Components**: Reusable components with proper generic typing
+Create a `.env` file in the `backend/` directory:
 
-### Code Quality Standards
+```bash
+# LiveKit Configuration (Required)
+LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_API_KEY=your_api_key
+LIVEKIT_API_SECRET=your_api_secret
 
-```json
+# AI Service (Required)
+GEMINI_API_KEY=your_gemini_api_key
+
+# Memory Service (Optional - graceful fallback if missing)
+MEM0_API_KEY=your_mem0_api_key
+
+# Optional Configuration
+PYTHON_ENV=development
+LOG_LEVEL=INFO
+```
+
+### Getting API Keys
+
+1. **LiveKit Cloud**:
+   - Sign up at [LiveKit Cloud](https://cloud.livekit.io)
+   - Create a new project
+   - Copy URL, API Key, and API Secret
+
+2. **Google AI Studio**:
+   - Visit [Google AI Studio](https://aistudio.google.com)
+   - Generate API key for Gemini models
+
+3. **mem0.ai**:
+   - Sign up at [mem0.ai](https://mem0.ai)
+   - Generate API key (optional - system works without it)
+
+## 📖 Usage Guide
+
+### Starting the Application
+
+1. **Start Backend Services**:
+   ```bash
+   # Terminal 1: Main Agent
+   cd backend && python agent.py dev
+   
+   # Terminal 2: Token Server
+   cd backend && python token_server.py
+   ```
+
+2. **Start Frontend**:
+   ```bash
+   # Terminal 3: Frontend
+   npm run dev
+   ```
+
+3. **Access Application**:
+   - Open http://localhost:3001
+   - Enter a room name (e.g., "general", "team-alpha")
+   - Start chatting with the AI agent
+
+### Using the Chat Interface
+
+1. **Join a Room**: Enter any room name to create/join
+2. **Send Messages**: Type and press Enter to send messages
+3. **AI Responses**: AI responds contextually based on conversation history
+4. **Multiple Users**: Different users can join the same room
+5. **Memory Persistence**: AI remembers user preferences and conversation context
+
+### Room Management
+
+- **Room Names**: Can be any string (alphanumeric, hyphens, underscores)
+- **Unique URLs**: Each room has a unique URL: `/chat/[room-name]`
+- **Persistence**: Rooms persist until empty for 5 minutes
+- **Rejoining**: Users can leave and rejoin rooms seamlessly
+
+## 📡 API Documentation
+
+### Token Generation Endpoint
+
+**POST** `http://localhost:3003/token`
+
+```javascript
+// Request
 {
-  "eslint": "Next.js recommended + custom rules",
-  "prettier": "Consistent code formatting",
-  "typescript": "Strict mode with comprehensive types"
+  "room_name": "string",
+  "participant_name": "string"
+}
+
+// Response
+{
+  "token": "jwt_token_string"
 }
 ```
 
-### Accessibility Standards
+### WebRTC Data Channel Messages
 
-- **WCAG 2.1 AA Compliance**: All components meet accessibility guidelines
-- **Keyboard Navigation**: Full keyboard support for all interactive elements
-- **Screen Reader Support**: Proper ARIA labels and semantic HTML
-- **Focus Management**: Logical focus flow and visible focus indicators
-- **Color Contrast**: Meets WCAG contrast requirements in all themes
-
-### Component Architecture
-
-```
-components/
-├── ui/           # shadcn/ui base components
-├── chat/         # Chat-specific components
-├── forms/        # Form components
-└── layout/       # Layout components
+**Message Format**:
+```javascript
+{
+  "type": "chat-message",
+  "content": "message_text",
+  "sender": "participant_name",
+  "timestamp": 1640995200000
+}
 ```
 
-### State Management Patterns
+### Agent Response Format
+```javascript
+{
+  "type": "chat-message",
+  "content": "ai_response_text", 
+  "sender": "AI Assistant",
+  "timestamp": 1640995200000
+}
+```
 
-- **React Hooks**: useState, useEffect, useCallback, useMemo
-- **Custom Hooks**: Encapsulated logic in reusable hooks
-- **Context API**: For global state when needed
-- **Local State**: Component-level state for UI interactions
+## 🛠 Development
 
-## 🚀 Available Scripts
+### Project Structure
+```
+memora/
+├── app/                    # Next.js pages
+│   ├── chat/[room]/       # Dynamic room pages
+│   └── api/livekit/token/ # Token generation API
+├── components/            # React components
+│   ├── chat/             # Chat-specific components  
+│   └── ui/               # Reusable UI components
+├── hooks/                # Custom React hooks
+├── lib/                  # Utility functions
+├── backend/              # Python backend
+│   ├── services/         # Core services
+│   │   ├── ai_service.py
+│   │   ├── memory_service.py
+│   │   └── message_handler.py
+│   ├── agent.py          # Main LiveKit agent
+│   └── token_server.py   # JWT token server
+└── utils/                # Shared utilities
+```
 
+### Development Workflow
+
+1. **Frontend Development**:
+   ```bash
+   npm run dev          # Start with hot reload
+   npm run build        # Production build
+   npm run type-check   # TypeScript validation
+   ```
+
+2. **Backend Development**:
+   ```bash
+   python agent.py dev  # Development mode with file watching
+   python agent.py start # Production mode
+   ```
+
+3. **Code Quality**:
+   ```bash
+   # Frontend
+   npm run lint         # ESLint checks
+   npm run format       # Prettier formatting
+   
+   # Backend  
+   python -m pytest     # Run tests
+   python -m black .    # Code formatting
+   python -m mypy .     # Type checking
+   ```
+
+### Adding New Features
+
+1. **Frontend Components**: Add to `components/` with TypeScript
+2. **Backend Services**: Extend `services/` with dependency injection
+3. **Memory Features**: Enhance `memory_service.py` with new capabilities
+4. **AI Behavior**: Modify prompts and context in `ai_service.py`
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**1. Agent Not Connecting**
 ```bash
-# Development
-npm run dev          # Start development server
-npm run build        # Build for production
-npm run start        # Start production server
-npm run lint         # Run ESLint
-npm run type-check   # Run TypeScript compiler check
+# Check agent logs
+python agent.py dev
 
-# Code Quality
-npm run lint:fix     # Fix ESLint issues automatically
-npm run format       # Format code with Prettier
+# Verify environment variables
+cat backend/.env
+
+# Test LiveKit connection
+python -c "from livekit import api; print('LiveKit SDK working')"
 ```
 
-## 📁 Project Structure
+**2. Frontend Connection Failed**
+- Verify token server running on port 3003
+- Check browser console for WebRTC errors
+- Ensure LiveKit credentials are correct
 
+**3. Memory Service Issues**
+```bash
+# Test mem0.ai connection
+python -c "from mem0 import Memory; m = Memory(); print('Memory service working')"
+
+# Check Qdrant status
+curl http://localhost:6333/health
 ```
-memora-frontend/
-├── app/                 # Next.js App Router pages
-├── components/          # React components
-│   ├── ui/             # Base UI components
-│   └── chat/           # Chat-specific components
-├── hooks/              # Custom React hooks
-├── lib/                # Utility functions
-├── public/             # Static assets
-├── styles/             # Global styles
-└── types/              # TypeScript type definitions
-```
+
+**4. WebRTC Connection Problems**
+- Check firewall settings for ports 3001, 3003
+- Verify LiveKit Cloud region settings
+- Test with different browsers (Chrome recommended)
+
+### Performance Optimization
+
+1. **Memory Usage**: Monitor Qdrant database size and optimize embeddings
+2. **Connection Speed**: Use closest LiveKit Cloud region
+3. **AI Response Time**: Implement response caching for common queries
+4. **Frontend Performance**: Implement message pagination for large conversations
+
+### Error Codes
+
+- `TOKEN_INVALID`: Regenerate LiveKit credentials
+- `MEMORY_SERVICE_DOWN`: Check mem0.ai API key or use fallback mode
+- `AGENT_TIMEOUT`: Restart agent service
+- `ROOM_FULL`: Implement room capacity limits
+
+## 📄 License
+
+MIT License - see [LICENSE.md](LICENSE.md) for details.
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-### Development Guidelines
+## 📧 Support
 
-- Follow the existing code style and patterns
-- Add TypeScript types for all new code
-- Include accessibility considerations
-- Test your changes across different screen sizes
-- Update documentation as needed
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Support
-
-If you encounter any issues or have questions:
-
-1. Check the existing issues in the repository
-2. Create a new issue with detailed information
-3. Include steps to reproduce any bugs
-4. Provide your environment details (Node.js version, browser, OS)
+For technical support or feature requests:
+- Create an issue on GitHub
+- Join our community discussions
+- Review the troubleshooting guide above
 
 ---
 
-**Built with ❤️ using Next.js, React, and TypeScript**
+**Built with ❤️ using modern web technologies**

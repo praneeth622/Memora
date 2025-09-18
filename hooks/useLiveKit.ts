@@ -219,20 +219,16 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
         console.log('🔌 Disconnected from LiveKit room, reason:', reason)
         setState(ConnectionState.DISCONNECTED)
         isConnectedRef.current = false
+        connectingRef.current = false
         
-        // TEMPORARILY DISABLED: Automatic reconnection (causing flickering)
-        // TODO: Re-enable with better stability checks once connection is stable
-        console.log('🔄 Automatic reconnection disabled to prevent flickering')
-        /*
-        if (reason && reason !== DisconnectReason.CLIENT_INITIATED && reconnectAttemptsRef.current < maxReconnectAttempts) {
-          console.log('🔄 Unexpected disconnection, attempting to reconnect...')
-          attemptReconnect()
-        } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-          console.error('❌ Max reconnection attempts reached, giving up')
-          setState(ConnectionState.ERROR)
-          setError('Connection lost and max reconnection attempts reached')
+        // Add error message for unexpected disconnections
+        if (reason && reason !== DisconnectReason.CLIENT_INITIATED) {
+          console.warn('⚠️ Unexpected disconnection from LiveKit room:', reason)
+          setError(`Connection lost: ${reason || 'Unknown reason'}`)
+        } else {
+          // Clear error for intentional disconnections
+          setError(null)
         }
-        */
       })
 
       room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
@@ -283,41 +279,83 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
         console.log('🔄 Reconnecting to LiveKit room...')
         setState(ConnectionState.RECONNECTING)
         reconnectAttemptsRef.current += 1
+        setError('Reconnecting...')
       })
 
       room.on(RoomEvent.Reconnected, () => {
         console.log('✅ Reconnected to LiveKit room')
         setState(ConnectionState.CONNECTED)
+        isConnectedRef.current = true
         reconnectAttemptsRef.current = 0 // Reset on successful reconnection
         setError(null) // Clear any previous errors
       })
 
+      // Add connection state change handler to catch signaling state issues
       room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
         console.log(`📊 Connection quality for ${participant?.identity || 'local'}: ${quality}`)
         if (quality === ConnectionQuality.Poor) {
           console.warn('⚠️ Poor connection quality detected')
+          setError('Poor connection quality - may experience issues')
+        } else if (quality === ConnectionQuality.Excellent || quality === ConnectionQuality.Good) {
+          // Clear quality-related errors when connection improves
+          if (error && error.includes('Poor connection')) {
+            setError(null)
+          }
         }
       })
+
+
 
       // Connect to room with retry logic
       const serverUrl = currentConfig.serverUrl || LIVEKIT_URL
       const connectOptions = {
         ...defaultConnectOptions,
-        // Use data-only mode for chat application
+        // Use data-only mode for chat application  
         autoSubscribe: false, // Don't automatically subscribe to audio/video
+        // Add WebRTC stability options
+        rtcConfig: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ],
+          iceCandidatePoolSize: 10,
+          bundlePolicy: 'balanced' as RTCBundlePolicy,
+          rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy
+        }
       }
       
       console.log('🔌 Attempting to connect to LiveKit server:', serverUrl)
       console.log('🎫 Using token:', token.substring(0, 50) + '...')
       console.log('⚙️ Connect options:', connectOptions)
       
-      // Add timeout to connection
-      const connectionPromise = room.connect(serverUrl, token, connectOptions)
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
-      )
+      // Add timeout to connection with retry logic
+      const maxRetries = 3
+      let retryCount = 0
+      let lastError: Error | null = null
       
-      await Promise.race([connectionPromise, timeoutPromise])
+      while (retryCount < maxRetries) {
+        try {
+          const connectionPromise = room.connect(serverUrl, token, connectOptions)
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Connection timeout after 15 seconds')), 15000)
+          )
+          
+          await Promise.race([connectionPromise, timeoutPromise])
+          break // Success - exit retry loop
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error('Unknown connection error')
+          retryCount++
+          
+          if (retryCount < maxRetries) {
+            console.warn(`🔄 Connection attempt ${retryCount} failed, retrying in ${retryCount * 2}s:`, lastError.message)
+            await new Promise(resolve => setTimeout(resolve, retryCount * 2000))
+          }
+        }
+      }
+      
+      if (retryCount >= maxRetries && lastError) {
+        throw lastError
+      }
       
       // Check if component is still mounted after async operation
       if (!connectingRef.current) {
@@ -401,15 +439,25 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
     try {
       console.log('🔌 Disconnecting from LiveKit room...')
       
-      // Disconnect from LiveKit room
-      if (roomRef.current) {
-        await roomRef.current.disconnect()
-        roomRef.current = null
-      }
-
+      // Set state immediately to prevent race conditions
       setState(ConnectionState.DISCONNECTED)
       isConnectedRef.current = false
-      connectingRef.current = false // Clear connecting flag
+      connectingRef.current = false
+
+      // Disconnect from LiveKit room with proper cleanup
+      if (roomRef.current) {
+        try {
+          // Remove all event listeners to prevent callbacks after disconnect
+          roomRef.current.removeAllListeners()
+          
+          // Disconnect with proper cleanup
+          await roomRef.current.disconnect(true) // Pass true for cleanup
+          roomRef.current = null
+        } catch (disconnectErr) {
+          console.warn('⚠️ Error during room disconnect (non-fatal):', disconnectErr)
+          roomRef.current = null // Force cleanup even if disconnect fails
+        }
+      }
 
       // Clear state
       setMessages([])
@@ -430,8 +478,8 @@ export default function useLiveKit(config: Partial<LiveKitConfig>): UseLiveKitRe
 
     } catch (err) {
       console.error('❌ Failed to disconnect from LiveKit room:', err)
-      setError(err instanceof Error ? err.message : 'Disconnection failed')
-      throw err
+      // Don't set error state for disconnect failures - just log them
+      console.warn('⚠️ Disconnect error is non-fatal, continuing...')
     }
   }, [])
 

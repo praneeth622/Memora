@@ -231,9 +231,13 @@ class ChatAgent:
             logger.info("🎯 Event handlers registered successfully")
             logger.info("🤖 ChatAgent is ready and listening for messages!")
             
-            # Send a welcome message to the room if there are participants
-            if len(ctx.room.remote_participants) > 0:
-                await self.send_welcome_message()
+            # Always send a welcome message when agent connects (regardless of current participants)
+            # This ensures users see the agent is active even when rejoining
+            await self.send_welcome_message()
+            
+            # Send personalized welcome to existing participants
+            for participant in ctx.room.remote_participants.values():
+                await self.send_welcome_message_to_participant(participant.identity)
                 
         except Exception as e:
             logger.error(f"❌ Error in agent entrypoint: {e}")
@@ -242,11 +246,17 @@ class ChatAgent:
     
     def on_participant_connected(self, participant: rtc.RemoteParticipant):
         logger.info(f"👤 Participant joined: {participant.identity}")
-        # Send welcome message to new participant
+        logger.info(f"📊 Room now has {len(self.room.remote_participants)} participants")
+        # Send welcome message to new participant (including rejoining users)
         asyncio.create_task(self.send_welcome_message_to_participant(participant.identity))
     
     def on_participant_disconnected(self, participant: rtc.RemoteParticipant):
         logger.info(f"👋 Participant left: {participant.identity}")
+        logger.info(f"📊 Room now has {len(self.room.remote_participants) - 1} participants")
+        
+        # Log if room becomes empty (useful for debugging)
+        if len(self.room.remote_participants) <= 1:  # -1 because this participant is still counted
+            logger.info(f"🏠 Room '{self.room.name or 'Unknown'}' is now empty - agent will remain active for rejoining users")
     
     async def send_welcome_message(self):
         """Send a welcome message when agent first joins the room."""
@@ -268,11 +278,14 @@ def prewarm(proc):
 
 if __name__ == "__main__":
     # Enable automatic dispatch by NOT setting agent_name
-    # This allows the agent to automatically join new rooms
+    # This allows the agent to automatically join new rooms and handle rejoining users
     worker_options = WorkerOptions(
         entrypoint_fnc=entrypoint, 
-        prewarm_fnc=prewarm
+        prewarm_fnc=prewarm,
         # NOTE: No agent_name set - this enables automatic dispatch to all rooms
+        # Ensure agent stays available for room rejoining scenarios
+        num_idle_processes=3  # Keep some processes ready
     )
     logger.info("Starting LiveKit agent with automatic dispatch enabled...")
+    logger.info("🔄 Agent configured to handle room rejoining scenarios")
     cli.run_app(worker_options)
