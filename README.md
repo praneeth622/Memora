@@ -14,6 +14,12 @@ Memora is an intelligent conversational AI platform that combines the power of r
 
 The system leverages LiveKit's WebRTC infrastructure for ultra-low latency messaging, Gemini AI for intelligent responses, and mem0.ai for sophisticated memory management, creating a seamless and intelligent conversational experience.
 
+## 🎥 Demo Video
+
+**[👀 Watch Memora in Action](https://www.loom.com/share/027365452f5b4e38b2b9aaf4096e5683?sid=14858101-4a71-416f-8018-78e71f18bde1)**
+
+See how Memora's real-time AI chat works with contextual memory, multi-user support, and seamless WebRTC communication.
+
 ## ✨ Key Features
 
 ### 🎯 Core Capabilities
